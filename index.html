@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNH CCS Spread Matrix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --card-bg: #ffffff;
+    --header-bg: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+    --header-text: #fff;
+    --cell-border: #e2e8f0;
+    --input-bg: #ffffff;
+    --label-bg: #f7f0d4;
+    --label-text: #5a4e2f;
+    --calc-bg: #e1eaf6;
+    --highlight-source: #d4edda;
+    --highlight-target: #f8d7da;
+    --accent: #2c5282;
+    --accent-light: #ebf0fa;
+    --danger: #e53e3e;
+    --text: #1a202c;
+    --text-muted: #718096;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; position: relative; padding-bottom: 60px; }
+  .top-bar { display: flex; align-items: center; gap: 16px; padding: 14px 22px; background: var(--header-bg); color: #fff; border-radius: var(--radius); margin-bottom: 12px; box-shadow: var(--shadow-md); }
+  .top-bar .title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .top-bar .subtitle { font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.7); border-left: 1px solid rgba(255,255,255,0.3); padding-left: 16px; }
+  .top-bar .version { font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 4px; color: rgba(255,255,255,0.85); }
+  .trade-bar { display: flex; align-items: center; padding: 10px 18px; background: var(--card-bg); border: 1px solid var(--cell-border); border-radius: var(--radius); margin-bottom: 12px; min-height: 42px; box-shadow: var(--shadow-sm); gap: 12px; }
+  .trade-bar-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); white-space: nowrap; }
+  .trade-bar-text { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: var(--accent); flex: 1; }
+  .trade-bar-text .take { color: #276749; }
+  .trade-bar-text .give { color: #9b2c2c; }
+  .controls-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .filter-btn { padding: 7px 14px; font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif; border: 1px solid var(--cell-border); background: var(--card-bg); border-radius: 6px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow-sm); }
+  .filter-btn:hover { background: var(--accent-light); border-color: var(--accent); }
+  .reset-btn { padding: 7px 14px; font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; border: 1px solid var(--danger); background: #fff5f5; color: var(--danger); border-radius: 6px; cursor: pointer; transition: all 0.15s; margin-left: auto; box-shadow: var(--shadow-sm); }
+  .reset-btn:hover { background: var(--danger); color: #fff; }
+  .matrix-container { display: flex; gap: 12px; align-items: flex-start; }
+  .section { background: var(--card-bg); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--cell-border); }
+  table { border-collapse: collapse; font-size: 13px; width: 100%; }
+  th { background: var(--accent); color: var(--header-text); padding: 9px 12px; text-align: center; font-weight: 600; font-size: 12px; font-family: 'Inter', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-bottom: 2px solid rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 2; }
+  td { border: 1px solid var(--cell-border); border-left: none; border-right: none; padding: 0; text-align: center; height: 32px; min-width: 28px; }
+  td.label-cell { background: var(--label-bg); color: var(--label-text); font-weight: 600; font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 2px 12px; white-space: nowrap; min-width: 76px; border-right: 2px solid #e2d9b8; }
+  td input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 400; padding: 2px 6px; outline: none; min-width: 64px; color: var(--text); transition: background 0.1s; }
+  td input:focus { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
+  td input.manual { font-weight: 700; background: var(--input-bg); }
+  td input.calculated { font-weight: 400; background: var(--calc-bg); }
+  td input.highlight-target { background: var(--highlight-target) !important; outline: 2px solid #e57383 !important; outline-offset: -2px; }
+  td input.highlight-source { background: var(--highlight-source) !important; outline: 2px solid #68d391 !important; outline-offset: -2px; }
+  tbody tr:nth-child(even) td:not(.label-cell) { background: #fafbfd; }
+  tbody tr:nth-child(even) td:not(.label-cell) input.calculated { background: #dae4f2; }
+  .filter-panel { display: none; position: absolute; background: var(--card-bg); border: 1px solid var(--cell-border); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow-lg); z-index: 100; max-height: 420px; overflow-y: auto; min-width: 230px; }
+  .filter-panel.show { display: block; }
+  .filter-panel h4 { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: var(--text); border-bottom: 2px solid var(--accent); padding-bottom: 6px; }
+  .filter-group { margin-bottom: 8px; }
+  .filter-group-label { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 3px; cursor: pointer; padding: 2px 4px; border-radius: 3px; transition: background 0.1s; }
+  .filter-group-label:hover { background: var(--accent-light); }
+  .filter-item { display: inline-block; margin: 1px 2px; }
+  .filter-item label { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; cursor: pointer; padding: 2px 5px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; transition: background 0.1s; }
+  .filter-item label:hover { background: #f0f0f0; }
+  .filter-item input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent); }
+  .filter-actions { display: flex; gap: 6px; margin-top: 8px; border-top: 1px solid var(--cell-border); padding-top: 8px; }
+  .filter-actions button { font-size: 12px; font-family: 'Inter', sans-serif; font-weight: 500; padding: 4px 12px; border: 1px solid var(--cell-border); background: #fff; border-radius: 4px; cursor: pointer; transition: all 0.1s; }
+  .filter-actions button:hover { background: var(--accent-light); border-color: var(--accent); }
+  .scroll-wrapper { max-height: 78vh; overflow-y: auto; }
+  .scroll-wrapper::-webkit-scrollbar { width: 6px; }
+  .scroll-wrapper::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+  .scroll-wrapper::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px; }
+  .scroll-wrapper::-webkit-scrollbar-thumb:hover { background: #a0aec0; }
+  .legend { position: fixed; bottom: 12px; left: 20px; display: flex; gap: 16px; align-items: center; font-size: 11px; color: var(--text-muted); font-family: 'Inter', sans-serif; background: rgba(255,255,255,0.95); padding: 8px 16px; border-radius: 6px; border: 1px solid var(--cell-border); box-shadow: var(--shadow-sm); z-index: 10; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-swatch { width: 20px; height: 14px; border-radius: 3px; border: 1px solid #ccc; display: inline-block; }
+  .legend-swatch.sw-input { background: var(--input-bg); }
+  .legend-swatch.sw-calc { background: var(--calc-bg); }
+  .legend-swatch.sw-selected { background: var(--highlight-target); border-color: #e57383; }
+  .legend-swatch.sw-source { background: var(--highlight-source); border-color: #68d391; }
+  .watermark { position: fixed; bottom: 12px; right: 20px; font-size: 12px; color: #a0aec0; font-weight: 500; font-family: 'Inter', sans-serif; cursor: pointer; transition: color 0.2s; text-decoration: none; z-index: 10; }
+  .watermark:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <span class="title">CNH CCS Spread Matrix</span>
+  <span class="subtitle">Offline Calculator</span>
+  <span class="version">v1.0</span>
+</div>
+<div class="trade-bar">
+  <span class="trade-bar-label">Trade</span>
+  <span class="trade-bar-text" id="tradeDesc">Click on a calculated cell to see trade description</span>
+</div>
+<div class="controls-bar">
+  <div style="position:relative;">
+    <button class="filter-btn" onclick="toggleFilter('spread')">&#9881; Spread Filter</button>
+    <div class="filter-panel" id="spreadFilterPanel"></div>
+  </div>
+  <div style="position:relative;">
+    <button class="filter-btn" onclick="toggleFilter('butterfly')">&#9881; Butterfly Filter</button>
+    <div class="filter-panel" id="butterflyFilterPanel"></div>
+  </div>
+  <button class="reset-btn" onclick="doReset()">&#10005; Reset All</button>
+</div>
+<div class="matrix-container">
+  <div class="section"><table><thead><tr><th>Outright</th><th>Ask</th><th>Bid</th></tr></thead><tbody id="outrightBody"></tbody></table></div>
+  <div class="section"><div class="scroll-wrapper"><table><thead><tr><th>Spread</th><th>Ask</th><th>Bid</th></tr></thead><tbody id="spreadBody"></tbody></table></div></div>
+  <div class="section"><div class="scroll-wrapper"><table><thead><tr><th>Butterfly</th><th>Ask</th><th>Bid</th></tr></thead><tbody id="butterflyBody"></tbody></table></div></div>
+</div>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch sw-input"></span><span><b>Bold</b> = User input</span></div>
+  <div class="legend-item"><span class="legend-swatch sw-calc"></span><span>Normal = Calculated</span></div>
+  <div class="legend-item"><span class="legend-swatch sw-selected"></span><span>Selected cell</span></div>
+  <div class="legend-item"><span class="legend-swatch sw-source"></span><span>Source inputs</span></div>
+</div>
+<a class="watermark" href="https://www.instagram.com/jlyn.lam/" target="_blank" rel="noopener">Created by Jlyn</a>
+
+<script>
+/* ===========================================================
+   CONFIG
+   =========================================================== */
+var TENORS = ['6M','9M','1Y','18M','2Y','3Y','4Y','5Y','7Y','8Y','9Y','10Y','12Y','15Y'];
+var BP = 0.01;
+
+function tsl(t) { var m = t.match(/^(\d+)Y$/); return m ? m[1] : t; }
+function sLabel(n, f) { return tsl(n) + 'x' + tsl(f); }
+function bLabel(a, b, c) { return tsl(a) + 'x' + tsl(b) + 'x' + tsl(c); }
+
+var ALL_SPREADS = [];
+for (var i = 0; i < TENORS.length; i++)
+  for (var j = i + 1; j < TENORS.length; j++)
+    ALL_SPREADS.push({ near: TENORS[i], far: TENORS[j], label: sLabel(TENORS[i], TENORS[j]) });
+
+var ALL_BUTTERFLIES = [];
+for (var i = 0; i < TENORS.length; i++)
+  for (var j = i + 1; j < TENORS.length; j++)
+    for (var k = j + 1; k < TENORS.length; k++)
+      ALL_BUTTERFLIES.push({ t1: TENORS[i], t2: TENORS[j], t3: TENORS[k],
+        label: bLabel(TENORS[i], TENORS[j], TENORS[k]),
+        s1: sLabel(TENORS[i], TENORS[j]), s2: sLabel(TENORS[j], TENORS[k]) });
+
+var SP = {}; ALL_SPREADS.forEach(function(s) { SP[s.label] = s; });
+var BF = {}; ALL_BUTTERFLIES.forEach(function(b) { BF[b.label] = b; });
+
+var DEFAULT_SPREADS_LIST = ['9Mx1','9Mx2','1x18M','1x2','1x3','1x4','1x5','1x7','1x10','18Mx2','18Mx3','18Mx4','2x3','2x4','2x5','2x7','3x4','3x5','4x5','5x7','5x10','7x10'];
+var DEFAULT_BUTTERFLIES_LIST = ['1x18Mx2','1x2x3','2x3x7','3x4x5'];
+var visSpreads = {}; DEFAULT_SPREADS_LIST.forEach(function(s) { visSpreads[s] = true; });
+var visButterflies = {}; DEFAULT_BUTTERFLIES_LIST.forEach(function(s) { visButterflies[s] = true; });
+
+/* ===========================================================
+   VALUE STORE + PROVENANCE
+
+   manual{}       = user-typed values
+   calc{}         = engine-derived values
+   calcDeps{}     = maps each calc key → array of keys it was derived from
+   backCalcFrom{} = maps outright calc key → spread label it was back-calculated from
+
+   Display: gv() returns narrower of manual vs calc.
+   =========================================================== */
+var manual = {};
+var calc = {};
+var calcDeps = {};
+var backCalcFrom = {};
+
+function rd(v) { return Math.round(v * 100000) / 100000; }
+
+function gv(k) {
+  var m = manual[k], c = calc[k];
+  if (m !== undefined && c !== undefined) {
+    if (k.indexOf('_ask') !== -1) return (c < m) ? c : m;
+    return (c > m) ? c : m;
+  }
+  if (m !== undefined) return m;
+  if (c !== undefined) return c;
+  return undefined;
+}
+
+function isDispManual(k) {
+  if (manual[k] === undefined) return false;
+  if (calc[k] === undefined) return true;
+  return gv(k) === manual[k];
+}
+
+function fmt(v, k) {
+  if (k.indexOf('outright_') === 0) return parseFloat(v.toFixed(4)).toString();
+  return parseFloat(v.toFixed(2)).toString();
+}
+function fmtSign(v) { return (v > 0) ? ('+' + v) : ('' + v); }
+
+function ev(k) {
+  if (manual[k] !== undefined) return manual[k];
+  if (calc[k] !== undefined) return calc[k];
+  return undefined;
+}
+
+function checkBidAsk(key, val) {
+  var base = key.replace(/_ask$/, '').replace(/_bid$/, '');
+  var isAsk = (key.indexOf('_ask') !== -1);
+  var pairKey = isAsk ? (base + '_bid') : (base + '_ask');
+  var pairVal = gv(pairKey);
+  if (pairVal === undefined) return true;
+  if (isAsk) return val >= pairVal;
+  return val <= pairVal;
+}
+
+/* ===========================================================
+   ENGINE
+
+   Phase 1: Main calculation with provenance tracking.
+   - Crossed spreads: check backCalcFrom to prevent same-spread circularity
+   - Back-calc outrights: only from MANUAL spreads, only to EMPTY cells
+   - Track calcDeps for every calc value
+
+   Phase 2: Narrowing (only for explicit overrides)
+   =========================================================== */
+function recalculate() {
+  calc = {};
+  calcDeps = {};
+  backCalcFrom = {};
+
+  for (var pass = 0; pass < 5; pass++) {
+
+    /* --- Spreads from outrights (CROSSED) --- */
+    ALL_SPREADS.forEach(function(s) {
+      var faKey = 'outright_' + s.far + '_ask',  nbKey = 'outright_' + s.near + '_bid';
+      var fbKey = 'outright_' + s.far + '_bid',  naKey = 'outright_' + s.near + '_ask';
+      var saKey = 'spread_' + s.label + '_ask',  sbKey = 'spread_' + s.label + '_bid';
+      var fa = ev(faKey), nb = ev(nbKey), fb = ev(fbKey), na = ev(naKey);
+
+      /* Spread Ask = (Far Ask - Near Bid) / BP (crossed)
+         BUT: don't use an outright that was back-calculated from THIS spread */
+      if (fa !== undefined && nb !== undefined) {
+        if (backCalcFrom[faKey] !== s.label && backCalcFrom[nbKey] !== s.label) {
+          calc[saKey] = rd((fa - nb) / BP);
+          calcDeps[saKey] = [faKey, nbKey];
+        }
+      }
+      /* Spread Bid = (Far Bid - Near Ask) / BP (crossed) */
+      if (fb !== undefined && na !== undefined) {
+        if (backCalcFrom[fbKey] !== s.label && backCalcFrom[naKey] !== s.label) {
+          calc[sbKey] = rd((fb - na) / BP);
+          calcDeps[sbKey] = [fbKey, naKey];
+        }
+      }
+    });
+
+    /* --- Back-calc outrights from MANUAL spreads, EMPTY cells only --- */
+    ALL_SPREADS.forEach(function(s) {
+      ['ask', 'bid'].forEach(function(side) {
+        var sk = 'spread_' + s.label + '_' + side;
+        var sv = manual[sk];
+        if (sv === undefined) return;
+        var nk = 'outright_' + s.near + '_' + side;
+        var fk = 'outright_' + s.far + '_' + side;
+        var nv = ev(nk), fv = ev(fk);
+        /* Far = Near + Spread × BP (same-side) */
+        if (fv === undefined && nv !== undefined) {
+          calc[fk] = rd(nv + sv * BP);
+          calcDeps[fk] = [nk, sk];
+          backCalcFrom[fk] = s.label;
+        }
+        /* Near = Far - Spread × BP (same-side) */
+        if (nv === undefined && fv !== undefined) {
+          calc[nk] = rd(fv - sv * BP);
+          calcDeps[nk] = [fk, sk];
+          backCalcFrom[nk] = s.label;
+        }
+      });
+    });
+
+    /* --- Butterflies from spreads (CROSSED) --- */
+    ALL_BUTTERFLIES.forEach(function(b) {
+      var s1aKey = 'spread_' + b.s1 + '_ask', s1bKey = 'spread_' + b.s1 + '_bid';
+      var s2aKey = 'spread_' + b.s2 + '_ask', s2bKey = 'spread_' + b.s2 + '_bid';
+      var baKey = 'butterfly_' + b.label + '_ask', bbKey = 'butterfly_' + b.label + '_bid';
+      var s1a = ev(s1aKey), s1b = ev(s1bKey), s2a = ev(s2aKey), s2b = ev(s2bKey);
+      if (s1a !== undefined && s2b !== undefined) {
+        calc[baKey] = rd(s1a - s2b);
+        calcDeps[baKey] = [s1aKey, s2bKey];
+      }
+      if (s1b !== undefined && s2a !== undefined) {
+        calc[bbKey] = rd(s1b - s2a);
+        calcDeps[bbKey] = [s1bKey, s2aKey];
+      }
+    });
+
+    /* --- Back-calc spreads from MANUAL butterflies, EMPTY cells only --- */
+    ALL_BUTTERFLIES.forEach(function(b) {
+      ['ask', 'bid'].forEach(function(side) {
+        var bk = 'butterfly_' + b.label + '_' + side;
+        var bv = manual[bk];
+        if (bv === undefined) return;
+        if (side === 'ask') {
+          var s1v = ev('spread_' + b.s1 + '_ask');
+          var s2bk = 'spread_' + b.s2 + '_bid';
+          if (ev(s2bk) === undefined && s1v !== undefined) {
+            calc[s2bk] = rd(s1v - bv);
+            calcDeps[s2bk] = ['spread_' + b.s1 + '_ask', bk];
+          }
+          var s1ak = 'spread_' + b.s1 + '_ask';
+          if (ev(s1ak) === undefined && ev(s2bk) !== undefined) {
+            calc[s1ak] = rd(bv + ev(s2bk));
+            calcDeps[s1ak] = [bk, s2bk];
+          }
+        } else {
+          var s1v2 = ev('spread_' + b.s1 + '_bid');
+          var s2ak = 'spread_' + b.s2 + '_ask';
+          if (ev(s2ak) === undefined && s1v2 !== undefined) {
+            calc[s2ak] = rd(s1v2 - bv);
+            calcDeps[s2ak] = ['spread_' + b.s1 + '_bid', bk];
+          }
+          var s1bk = 'spread_' + b.s1 + '_bid';
+          if (ev(s1bk) === undefined && ev(s2ak) !== undefined) {
+            calc[s1bk] = rd(bv + ev(s2ak));
+            calcDeps[s1bk] = [bk, s2ak];
+          }
+        }
+      });
+    });
+  }
+
+  /* ---- PHASE 2: NARROWING ----
+     Only for cells where user explicitly overrode a calculated value
+     (manual[k] exists AND calc[k] exists = override).
+     Same-side back-calc with bid<=ask enforcement. */
+  ALL_SPREADS.forEach(function(s) {
+    ['ask', 'bid'].forEach(function(side) {
+      var sk = 'spread_' + s.label + '_' + side;
+      if (manual[sk] === undefined || calc[sk] === undefined) return;
+
+      var spreadVal = manual[sk];
+      var nk = 'outright_' + s.near + '_' + side;
+      var fk = 'outright_' + s.far + '_' + side;
+
+      /* Far = Near + Spread × BP (same-side narrowing) */
+      var nv = ev(nk);
+      if (nv !== undefined) {
+        var newFar = rd(nv + spreadVal * BP);
+        var existFar = ev(fk);
+        if (existFar !== undefined) {
+          var narrower = (side === 'ask') ? (newFar < existFar) : (newFar > existFar);
+          if (narrower && checkBidAsk(fk, newFar)) {
+            calc[fk] = newFar;
+            calcDeps[fk] = [nk, sk];
+          }
+        }
+      }
+
+      /* Near = Far - Spread × BP (same-side narrowing) */
+      var fv = ev(fk);
+      if (fv !== undefined) {
+        var newNear = rd(fv - spreadVal * BP);
+        var existNear = ev(nk);
+        if (existNear !== undefined) {
+          var narrower2 = (side === 'ask') ? (newNear < existNear) : (newNear > existNear);
+          if (narrower2 && checkBidAsk(nk, newNear)) {
+            calc[nk] = newNear;
+            calcDeps[nk] = [fk, sk];
+          }
+        }
+      }
+    });
+  });
+
+  /* Re-derive affected spreads from narrowed outrights */
+  ALL_SPREADS.forEach(function(s) {
+    var ak = 'spread_' + s.label + '_ask', bk = 'spread_' + s.label + '_bid';
+    if (calc[ak] !== undefined) {
+      var fa2 = gv('outright_' + s.far + '_ask'), nb2 = gv('outright_' + s.near + '_bid');
+      if (fa2 !== undefined && nb2 !== undefined) {
+        calc[ak] = rd((fa2 - nb2) / BP);
+        calcDeps[ak] = ['outright_' + s.far + '_ask', 'outright_' + s.near + '_bid'];
+      }
+    }
+    if (calc[bk] !== undefined) {
+      var fb3 = gv('outright_' + s.far + '_bid'), na3 = gv('outright_' + s.near + '_ask');
+      if (fb3 !== undefined && na3 !== undefined) {
+        calc[bk] = rd((fb3 - na3) / BP);
+        calcDeps[bk] = ['outright_' + s.far + '_bid', 'outright_' + s.near + '_ask'];
+      }
+    }
+  });
+
+  /* Re-derive affected butterflies from narrowed spreads */
+  ALL_BUTTERFLIES.forEach(function(b) {
+    var ak = 'butterfly_' + b.label + '_ask', bk = 'butterfly_' + b.label + '_bid';
+    if (calc[ak] !== undefined) {
+      var s1a2 = gv('spread_' + b.s1 + '_ask'), s2b2 = gv('spread_' + b.s2 + '_bid');
+      if (s1a2 !== undefined && s2b2 !== undefined) {
+        calc[ak] = rd(s1a2 - s2b2);
+        calcDeps[ak] = ['spread_' + b.s1 + '_ask', 'spread_' + b.s2 + '_bid'];
+      }
+    }
+    if (calc[bk] !== undefined) {
+      var s1b2 = gv('spread_' + b.s1 + '_bid'), s2a2 = gv('spread_' + b.s2 + '_ask');
+      if (s1b2 !== undefined && s2a2 !== undefined) {
+        calc[bk] = rd(s1b2 - s2a2);
+        calcDeps[bk] = ['spread_' + b.s1 + '_bid', 'spread_' + b.s2 + '_ask'];
+      }
+    }
+  });
+
+  updateAllInputs();
+}
+
+function updateAllInputs() {
+  var focused = document.activeElement;
+  var inputs = document.querySelectorAll('td input[data-key]');
+  for (var i = 0; i < inputs.length; i++) {
+    var inp = inputs[i];
+    if (inp === focused) continue;
+    var k = inp.getAttribute('data-key');
+    var v = gv(k);
+    inp.value = (v !== undefined) ? fmt(v, k) : '';
+    inp.className = '';
+    if (v !== undefined) inp.className = isDispManual(k) ? 'manual' : 'calculated';
+  }
+}
+
+/* ===========================================================
+   RECURSIVE DEPENDENCY CHAIN
+   BFS over calcDeps to find ALL source keys in the chain.
+   =========================================================== */
+function getAllSourceKeys(key) {
+  var visited = {};
+  var queue = [key];
+  visited[key] = true;
+  var sources = [];
+
+  while (queue.length > 0) {
+    var cur = queue.shift();
+    var deps = calcDeps[cur];
+    if (deps) {
+      for (var i = 0; i < deps.length; i++) {
+        var dk = deps[i];
+        if (!visited[dk]) {
+          visited[dk] = true;
+          sources.push(dk);
+          /* If this dep is also a calc value, recurse into its deps */
+          if (calc[dk] !== undefined && !isDispManual(dk)) {
+            queue.push(dk);
+          }
+        }
+      }
+    }
+  }
+  return sources;
+}
+
+/* ===========================================================
+   TRADE DESCRIPTION
+   Works for all calc types: crossed spreads, back-calc outrights,
+   butterflies, and narrowed cells.
+   =========================================================== */
+function showTradeDesc(key) {
+  var el = document.getElementById('tradeDesc');
+  var desc = getTradeDesc(key);
+  if (desc) el.innerHTML = desc;
+  else el.textContent = 'Click on a calculated cell to see trade description';
+}
+
+function getTradeDesc(key) {
+  /* Only show trade desc for cells that have a calc value */
+  if (calc[key] === undefined) return null;
+  var deps = calcDeps[key];
+  if (!deps || deps.length === 0) return null;
+
+  /* Recursively decompose to leaf-level trades.
+     Each leaf is { key, action:'take'|'give', label, value }.
+     We walk the calc chain: at each node, determine the take/give
+     semantics, then recurse into any non-leaf (calculated) children,
+     flipping action when a child is on the "give" side. */
+  var leaves = getLeafTrades(key, 'take');
+  if (!leaves || leaves.length === 0) return null;
+
+  /* Merge duplicates: same key appearing multiple times.
+     take+give of same key cancel out; take+take or give+give = net */
+  var merged = {};
+  var order = [];
+  for (var i = 0; i < leaves.length; i++) {
+    var lf = leaves[i];
+    if (!merged[lf.key]) { merged[lf.key] = { key: lf.key, label: lf.label, value: lf.value, net: 0 }; order.push(lf.key); }
+    merged[lf.key].net += (lf.action === 'take') ? 1 : -1;
+  }
+
+  var parts = [];
+  for (var i = 0; i < order.length; i++) {
+    var m = merged[order[i]];
+    if (m.net === 0) continue; /* cancelled out */
+    var action = (m.net > 0) ? 'take' : 'give';
+    var cls = action;
+    var lbl = action.charAt(0).toUpperCase() + action.slice(1);
+    parts.push('<span class="' + cls + '">' + lbl + ' ' + m.label + ' ' + m.value + '</span>');
+  }
+
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
+/* Recursively get leaf-level trades for a key.
+   parentAction = 'take' or 'give' — how the parent views this node.
+   Returns array of { key, action, label, value } */
+function getLeafTrades(key, parentAction) {
+  var val = gv(key);
+  if (val === undefined) return [];
+
+  /* If this is a manual leaf (no calc deps, or displayed as manual), return it directly */
+  if (isDispManual(key) || !calcDeps[key] || calcDeps[key].length === 0) {
+    return [{ key: key, action: parentAction, label: fmtKeyLabel(key), value: fmtKeyValue(key, val) }];
+  }
+
+  /* --- SPREAD: spread = far outright - near outright --- */
+  var sm = key.match(/^spread_(.+)_(ask|bid)$/);
+  if (sm) {
+    var s = SP[sm[1]]; if (!s) return [];
+    /* spread_ask = far_ask - near_bid → Take far, Give near
+       spread_bid = far_bid - near_ask → Give far, Take near */
+    var farSide, nearSide, farAction, nearAction;
+    if (sm[2] === 'ask') {
+      farSide = 'ask'; nearSide = 'bid';
+      farAction = parentAction;                               /* take spread → take far */
+      nearAction = (parentAction === 'take') ? 'give' : 'take'; /* take spread → give near */
+    } else {
+      farSide = 'bid'; nearSide = 'ask';
+      farAction = (parentAction === 'take') ? 'give' : 'take'; /* take spread bid → give far */
+      nearAction = parentAction;                               /* take spread bid → take near */
+    }
+    var farKey = 'outright_' + s.far + '_' + farSide;
+    var nearKey = 'outright_' + s.near + '_' + nearSide;
+    var result = getLeafTrades(farKey, farAction);
+    return result.concat(getLeafTrades(nearKey, nearAction));
+  }
+
+  /* --- BUTTERFLY: butterfly = spread1 - spread2 --- */
+  var bm = key.match(/^butterfly_(.+)_(ask|bid)$/);
+  if (bm) {
+    var b = BF[bm[1]]; if (!b) return [];
+    /* butterfly_ask = s1_ask - s2_bid → Take s1, Give s2
+       butterfly_bid = s1_bid - s2_ask → Give s1, Take s2 */
+    var s1Side, s2Side, s1Action, s2Action;
+    if (bm[2] === 'ask') {
+      s1Side = 'ask'; s2Side = 'bid';
+      s1Action = parentAction;
+      s2Action = (parentAction === 'take') ? 'give' : 'take';
+    } else {
+      s1Side = 'bid'; s2Side = 'ask';
+      s1Action = (parentAction === 'take') ? 'give' : 'take';
+      s2Action = parentAction;
+    }
+    var s1Key = 'spread_' + b.s1 + '_' + s1Side;
+    var s2Key = 'spread_' + b.s2 + '_' + s2Side;
+    var result = getLeafTrades(s1Key, s1Action);
+    return result.concat(getLeafTrades(s2Key, s2Action));
+  }
+
+  /* --- BACK-CALC OUTRIGHT: derived from another outright + a spread --- */
+  var om = key.match(/^outright_(.+)_(ask|bid)$/);
+  if (om) {
+    var tenor = om[1], side = om[2];
+    var deps = calcDeps[key];
+    if (deps && deps.length === 2) {
+      /* deps = [outrightKey, spreadKey] or [spreadKey, outrightKey] */
+      var outrightDep, spreadDep;
+      for (var i = 0; i < deps.length; i++) {
+        if (deps[i].indexOf('spread_') === 0) spreadDep = deps[i];
+        else outrightDep = deps[i];
+      }
+      if (outrightDep && spreadDep) {
+        var sdm = spreadDep.match(/^spread_(.+)_(ask|bid)$/);
+        if (sdm) {
+          var sInfo = SP[sdm[1]];
+          if (sInfo) {
+            /* far = near + spread → take far = take near + take spread
+               near = far - spread → take near = take far + give spread */
+            if (sInfo.far === tenor) {
+              /* I am far = near + spread */
+              return getLeafTrades(outrightDep, parentAction)
+                .concat(getLeafTrades(spreadDep, parentAction));
+            } else {
+              /* I am near = far - spread */
+              var flipAction = (parentAction === 'take') ? 'give' : 'take';
+              return getLeafTrades(outrightDep, parentAction)
+                .concat(getLeafTrades(spreadDep, flipAction));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* Fallback: treat as leaf */
+  return [{ key: key, action: parentAction, label: fmtKeyLabel(key), value: fmtKeyValue(key, val) }];
+}
+
+/* Format a key into a human-readable label */
+function fmtKeyLabel(key) {
+  var om = key.match(/^outright_(.+)_(ask|bid)$/);
+  if (om) return om[1];
+  var sm = key.match(/^spread_(.+)_(ask|bid)$/);
+  if (sm) return sm[1];
+  var bm = key.match(/^butterfly_(.+)_(ask|bid)$/);
+  if (bm) return bm[1];
+  return key;
+}
+
+/* Format a value for display — outrights as-is, spreads/butterflies with sign */
+function fmtKeyValue(key, val) {
+  if (key.indexOf('outright_') === 0) return '' + val;
+  return fmtSign(val);
+}
+
+/* ===========================================================
+   DEPENDENCY HIGHLIGHTING — RECURSIVE
+   =========================================================== */
+var hlKeys = [];
+
+function clearHL() {
+  for (var i = 0; i < hlKeys.length; i++) {
+    var el = document.querySelector('input[data-key="' + hlKeys[i] + '"]');
+    if (el) { el.classList.remove('highlight-target'); el.classList.remove('highlight-source'); }
+  }
+  hlKeys = [];
+}
+
+function highlightDeps(key) {
+  clearHL();
+  if (calc[key] === undefined) return;
+  var inp = document.querySelector('input[data-key="' + key + '"]');
+  if (inp) { inp.classList.add('highlight-target'); hlKeys.push(key); }
+
+  /* Get FULL recursive dependency chain */
+  var allSources = getAllSourceKeys(key);
+  for (var i = 0; i < allSources.length; i++) {
+    var el = document.querySelector('input[data-key="' + allSources[i] + '"]');
+    if (el && gv(allSources[i]) !== undefined) {
+      el.classList.add('highlight-source');
+      hlKeys.push(allSources[i]);
+    }
+  }
+}
+
+/* ===========================================================
+   INPUT VALIDATION & CREATION
+   =========================================================== */
+function isValidChar(key, currentValue) {
+  if (key >= '0' && key <= '9') return true;
+  if (key === '.' && currentValue.indexOf('.') === -1) return true;
+  if (key === '-' && currentValue.length === 0) return true;
+  return false;
+}
+
+function mkInput(key) {
+  var inp = document.createElement('input');
+  inp.type = 'text';
+  inp.setAttribute('data-key', key);
+  inp.setAttribute('inputmode', 'decimal');
+
+  var focusValue = '';
+  var wasCalcOnly = false;
+
+  inp.addEventListener('keydown', function(e) {
+    if (['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].indexOf(e.key) !== -1) return;
+    if (e.key === 'Escape') {
+      delete manual[key]; recalculate(); forceUpdateCell(inp, key); inp.blur(); return;
+    }
+    if ((e.ctrlKey || e.metaKey) && 'acvx'.indexOf(e.key) !== -1) return;
+    if (isValidChar(e.key, inp.value)) return;
+    e.preventDefault();
+  });
+
+  inp.addEventListener('paste', function(e) {
+    var paste = (e.clipboardData || window.clipboardData).getData('text');
+    if (!/^-?\d*\.?\d*$/.test(paste)) e.preventDefault();
+  });
+
+  inp.addEventListener('focus', function() {
+    focusValue = inp.value;
+    wasCalcOnly = (calc[key] !== undefined && manual[key] === undefined);
+    inp.select();
+    highlightDeps(key);
+    showTradeDesc(key);
+  });
+
+  inp.addEventListener('input', function() {
+    var raw = inp.value.trim();
+    if (raw === '' || raw === '-' || raw === '.' || raw === '-.') {
+      delete manual[key]; recalculate(); return;
+    }
+    var num = parseFloat(raw);
+    if (!isNaN(num)) { manual[key] = num; recalculate(); }
+  });
+
+  inp.addEventListener('blur', function() {
+    var raw = inp.value.trim();
+    if (raw === '' || raw === '-' || raw === '.' || raw === '-.') {
+      delete manual[key]; recalculate(); forceUpdateCell(inp, key); return;
+    }
+    var num = parseFloat(raw);
+    if (isNaN(num)) { delete manual[key]; recalculate(); forceUpdateCell(inp, key); return; }
+
+    /* NO-OP check: if value didn't change, don't set manual */
+    if (raw === focusValue || fmt(num, key) === focusValue) {
+      if (wasCalcOnly) delete manual[key];
+      recalculate(); forceUpdateCell(inp, key); return;
+    }
+
+    /* Override validation for calc cells */
+    if (wasCalcOnly) {
+      delete manual[key]; recalculate();
+      var pureCalcVal = calc[key];
+      if (pureCalcVal !== undefined) {
+        var isNarrower = (key.indexOf('_ask') !== -1) ? (num < pureCalcVal) : (num > pureCalcVal);
+        if (!isNarrower || !checkBidAsk(key, num)) {
+          forceUpdateCell(inp, key); return;
+        }
+      }
+    } else {
+      if (!checkBidAsk(key, num)) {
+        delete manual[key]; recalculate(); forceUpdateCell(inp, key); return;
+      }
+    }
+
+    manual[key] = num; recalculate(); forceUpdateCell(inp, key);
+  });
+
+  var v = gv(key);
+  if (v !== undefined) { inp.value = fmt(v, key); inp.className = isDispManual(key) ? 'manual' : 'calculated'; }
+  return inp;
+}
+
+function forceUpdateCell(inp, key) {
+  var v = gv(key);
+  inp.value = (v !== undefined) ? fmt(v, key) : '';
+  inp.className = '';
+  if (v !== undefined) inp.className = isDispManual(key) ? 'manual' : 'calculated';
+}
+
+function mkRow(body, label, askKey, bidKey) {
+  var tr = document.createElement('tr');
+  var td0 = document.createElement('td'); td0.className = 'label-cell'; td0.textContent = label;
+  var td1 = document.createElement('td'); td1.appendChild(mkInput(askKey));
+  var td2 = document.createElement('td'); td2.appendChild(mkInput(bidKey));
+  tr.appendChild(td0); tr.appendChild(td1); tr.appendChild(td2);
+  body.appendChild(tr);
+}
+
+function renderOutright() {
+  var b = document.getElementById('outrightBody'); b.innerHTML = '';
+  TENORS.forEach(function(t) { mkRow(b, t, 'outright_' + t + '_ask', 'outright_' + t + '_bid'); });
+}
+function renderSpreads() {
+  var b = document.getElementById('spreadBody'); b.innerHTML = '';
+  ALL_SPREADS.forEach(function(s) { if (visSpreads[s.label]) mkRow(b, s.label, 'spread_' + s.label + '_ask', 'spread_' + s.label + '_bid'); });
+}
+function renderButterflies() {
+  var b = document.getElementById('butterflyBody'); b.innerHTML = '';
+  ALL_BUTTERFLIES.forEach(function(bf) { if (visButterflies[bf.label]) mkRow(b, bf.label, 'butterfly_' + bf.label + '_ask', 'butterfly_' + bf.label + '_bid'); });
+}
+function renderAll() { renderOutright(); renderSpreads(); renderButterflies(); recalculate(); }
+
+function doReset() {
+  manual = {}; calc = {}; calcDeps = {}; backCalcFrom = {};
+  clearHL();
+  document.getElementById('tradeDesc').textContent = 'Click on a calculated cell to see trade description';
+  var allInputs = document.querySelectorAll('td input');
+  for (var i = 0; i < allInputs.length; i++) { allInputs[i].value = ''; allInputs[i].className = ''; }
+  renderAll();
+}
+
+/* ===========================================================
+   FILTER PANELS
+   =========================================================== */
+function buildFilterPanel(type) {
+  var isSpread = (type === 'spread');
+  var panel = document.getElementById(isSpread ? 'spreadFilterPanel' : 'butterflyFilterPanel');
+  var items = isSpread ? ALL_SPREADS : ALL_BUTTERFLIES;
+  var vis = isSpread ? visSpreads : visButterflies;
+  var defList = isSpread ? DEFAULT_SPREADS_LIST : DEFAULT_BUTTERFLIES_LIST;
+  var renderFn = isSpread ? renderSpreads : renderButterflies;
+  panel.innerHTML = '';
+  var h = document.createElement('h4'); h.textContent = isSpread ? 'Show/Hide Spreads' : 'Show/Hide Butterflies'; panel.appendChild(h);
+  var groups = {};
+  items.forEach(function(item) { var gk = isSpread ? tsl(item.near) : tsl(item.t2); if (!groups[gk]) groups[gk] = []; groups[gk].push(item); });
+  Object.keys(groups).forEach(function(gLabel) {
+    var gItems = groups[gLabel];
+    var grp = document.createElement('div'); grp.className = 'filter-group';
+    var lbl = document.createElement('div'); lbl.className = 'filter-group-label';
+    lbl.textContent = (isSpread ? 'Near: ' : 'Mid: ') + gLabel;
+    lbl.onclick = function() { var allOn = gItems.every(function(i) { return vis[i.label]; }); gItems.forEach(function(i) { if (allOn) delete vis[i.label]; else vis[i.label] = true; }); buildFilterPanel(type); renderFn(); recalculate(); };
+    grp.appendChild(lbl);
+    gItems.forEach(function(item) {
+      var div = document.createElement('div'); div.className = 'filter-item';
+      var lab = document.createElement('label');
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!vis[item.label];
+      cb.onchange = function() { if (cb.checked) vis[item.label] = true; else delete vis[item.label]; renderFn(); recalculate(); };
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(item.label)); div.appendChild(lab); grp.appendChild(div);
+    });
+    panel.appendChild(grp);
+  });
+  var actions = document.createElement('div'); actions.className = 'filter-actions';
+  [['Select All', function() { items.forEach(function(i) { vis[i.label] = true; }); }],
+   ['Deselect All', function() { Object.keys(vis).forEach(function(k) { delete vis[k]; }); }],
+   ['Defaults', function() { Object.keys(vis).forEach(function(k) { delete vis[k]; }); defList.forEach(function(d) { vis[d] = true; }); }]
+  ].forEach(function(pair) {
+    var btn = document.createElement('button'); btn.textContent = pair[0];
+    btn.onclick = function() { pair[1](); buildFilterPanel(type); renderFn(); recalculate(); };
+    actions.appendChild(btn);
+  });
+  panel.appendChild(actions);
+}
+
+function toggleFilter(type) {
+  var pid = (type === 'spread') ? 'spreadFilterPanel' : 'butterflyFilterPanel';
+  var oid = (type === 'spread') ? 'butterflyFilterPanel' : 'spreadFilterPanel';
+  document.getElementById(oid).classList.remove('show');
+  var p = document.getElementById(pid);
+  if (p.classList.contains('show')) p.classList.remove('show');
+  else { buildFilterPanel(type); p.classList.add('show'); }
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.controls-bar')) {
+    document.getElementById('spreadFilterPanel').classList.remove('show');
+    document.getElementById('butterflyFilterPanel').classList.remove('show');
+  }
+  if (!e.target.matches('td input')) {
+    clearHL();
+    document.getElementById('tradeDesc').textContent = 'Click on a calculated cell to see trade description';
+  }
+});
+
+renderAll();
+</script>
+</body>
+</html>
