@@ -48,10 +48,10 @@
   .matrix-container { display: flex; gap: 12px; align-items: flex-start; }
   .section { background: var(--card-bg); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--cell-border); }
   table { border-collapse: collapse; font-size: 13px; width: 100%; }
-  th { background: var(--accent); color: var(--header-text); padding: 9px 12px; text-align: center; font-weight: 600; font-size: 12px; font-family: 'Inter', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-bottom: 2px solid rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 2; }
-  td { border: 1px solid var(--cell-border); border-left: none; border-right: none; padding: 0; text-align: center; height: 32px; min-width: 28px; }
-  td.label-cell { background: var(--label-bg); color: var(--label-text); font-weight: 600; font-size: 12px; font-family: 'JetBrains Mono', monospace; padding: 2px 12px; white-space: nowrap; min-width: 76px; border-right: 2px solid #e2d9b8; }
-  td input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 400; padding: 2px 6px; outline: none; min-width: 64px; color: var(--text); transition: background 0.1s; }
+  th { background: var(--accent); color: var(--header-text); padding: 6px 8px; text-align: center; font-weight: 600; font-size: 11px; font-family: 'Inter', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-bottom: 2px solid rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 2; }
+  td { border: 1px solid var(--cell-border); border-left: none; border-right: none; padding: 0; text-align: center; height: 26px; min-width: 22px; }
+  td.label-cell { background: var(--label-bg); color: var(--label-text); font-weight: 600; font-size: 11px; font-family: 'JetBrains Mono', monospace; padding: 1px 8px; white-space: nowrap; min-width: 60px; border-right: 2px solid #e2d9b8; }
+  td input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 400; padding: 1px 4px; outline: none; min-width: 52px; color: var(--text); transition: background 0.1s; }
   td input:focus { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
   td input.manual { font-weight: 700; background: var(--input-bg); }
   td input.calculated { font-weight: 400; background: var(--calc-bg); }
@@ -384,6 +384,71 @@ function recalculate() {
         }
       });
     });
+
+    /* --- Butterfly chaining (CROSSED) ---
+       For butterflies sharing (t1,t2): fly(t1,t2,t3) and spread(t3,t5) → fly(t1,t2,t5)
+       fly_long_ask = fly_short_ask - spread_bid  (crossed)
+       fly_long_bid = fly_short_bid - spread_ask  (crossed)
+       
+       Also: fly(t1,t2,t3) and fly(t1,t2,t5) → spread(t3,t5)
+       spread_ask = fly_short_ask - fly_long_bid  (crossed)
+       spread_bid = fly_short_bid - fly_long_ask  (crossed)
+       
+       And: spread(t3,t5) and fly(t1,t2,t5) → fly(t1,t2,t3)
+       fly_short_ask = fly_long_ask + spread_ask  (same-side addition)
+       fly_short_bid = fly_long_bid + spread_bid  (same-side addition) */
+    for (var bi = 0; bi < ALL_BUTTERFLIES.length; bi++) {
+      for (var bj = bi + 1; bj < ALL_BUTTERFLIES.length; bj++) {
+        var b1 = ALL_BUTTERFLIES[bi], b2 = ALL_BUTTERFLIES[bj];
+        /* Only process pairs sharing (t1, t2) */
+        if (b1.t1 !== b2.t1 || b1.t2 !== b2.t2) continue;
+        /* b1 has shorter t3, b2 has longer t3 (since ALL_BUTTERFLIES is sorted) */
+        var shortFly = b1, longFly = b2;
+        var midSpreadLabel = sLabel(shortFly.t3, longFly.t3);
+        var sfaKey = 'butterfly_' + shortFly.label + '_ask', sfbKey = 'butterfly_' + shortFly.label + '_bid';
+        var lfaKey = 'butterfly_' + longFly.label + '_ask',  lfbKey = 'butterfly_' + longFly.label + '_bid';
+        var msaKey = 'spread_' + midSpreadLabel + '_ask',    msbKey = 'spread_' + midSpreadLabel + '_bid';
+
+        var sfa = ev(sfaKey), sfb = ev(sfbKey), lfa = ev(lfaKey), lfb = ev(lfbKey);
+        var msa = ev(msaKey), msb = ev(msbKey);
+
+        /* Long fly = Short fly - Mid spread (crossed) */
+        if (sfa !== undefined && msb !== undefined && lfa === undefined) {
+          calc[lfaKey] = rd(sfa - msb);
+          calcDeps[lfaKey] = [sfaKey, msbKey];
+        }
+        if (sfb !== undefined && msa !== undefined && lfb === undefined) {
+          calc[lfbKey] = rd(sfb - msa);
+          calcDeps[lfbKey] = [sfbKey, msaKey];
+        }
+
+        /* Re-read */
+        lfa = ev(lfaKey); lfb = ev(lfbKey);
+
+        /* Mid spread = Short fly - Long fly (crossed) */
+        if (sfa !== undefined && lfb !== undefined && msa === undefined) {
+          calc[msaKey] = rd(sfa - lfb);
+          calcDeps[msaKey] = [sfaKey, lfbKey];
+        }
+        if (sfb !== undefined && lfa !== undefined && msb === undefined) {
+          calc[msbKey] = rd(sfb - lfa);
+          calcDeps[msbKey] = [sfbKey, lfaKey];
+        }
+
+        /* Re-read */
+        msa = ev(msaKey); msb = ev(msbKey);
+
+        /* Short fly = Long fly + Mid spread (same-side addition) */
+        if (lfa !== undefined && msa !== undefined && ev(sfaKey) === undefined) {
+          calc[sfaKey] = rd(lfa + msa);
+          calcDeps[sfaKey] = [lfaKey, msaKey];
+        }
+        if (lfb !== undefined && msb !== undefined && ev(sfbKey) === undefined) {
+          calc[sfbKey] = rd(lfb + msb);
+          calcDeps[sfbKey] = [lfbKey, msbKey];
+        }
+      }
+    }
   }
 
   /* ---- PHASE 2: NARROWING ----
