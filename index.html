@@ -228,27 +228,75 @@ function recalculate() {
 
   for (var pass = 0; pass < 5; pass++) {
 
-    /* --- Spreads from outrights (SAME-SIDE) --- */
+    /* --- Spreads from outrights (CROSSED) --- */
     ALL_SPREADS.forEach(function(s) {
-      var faKey = 'outright_' + s.far + '_ask',  naKey = 'outright_' + s.near + '_ask';
-      var fbKey = 'outright_' + s.far + '_bid',  nbKey = 'outright_' + s.near + '_bid';
+      var faKey = 'outright_' + s.far + '_ask',  nbKey = 'outright_' + s.near + '_bid';
+      var fbKey = 'outright_' + s.far + '_bid',  naKey = 'outright_' + s.near + '_ask';
       var saKey = 'spread_' + s.label + '_ask',  sbKey = 'spread_' + s.label + '_bid';
-      var fa = ev(faKey), na = ev(naKey), fb = ev(fbKey), nb = ev(nbKey);
+      var fa = ev(faKey), nb = ev(nbKey), fb = ev(fbKey), na = ev(naKey);
 
-      /* Spread Ask = (Far Ask - Near Ask) / BP (same-side)
+      /* Spread Ask = (Far Ask - Near Bid) / BP (crossed)
          BUT: don't use an outright that was back-calculated from THIS spread */
-      if (fa !== undefined && na !== undefined) {
-        if (backCalcFrom[faKey] !== s.label && backCalcFrom[naKey] !== s.label) {
-          calc[saKey] = rd((fa - na) / BP);
-          calcDeps[saKey] = [faKey, naKey];
+      if (fa !== undefined && nb !== undefined) {
+        if (backCalcFrom[faKey] !== s.label && backCalcFrom[nbKey] !== s.label) {
+          calc[saKey] = rd((fa - nb) / BP);
+          calcDeps[saKey] = [faKey, nbKey];
         }
       }
-      /* Spread Bid = (Far Bid - Near Bid) / BP (same-side) */
-      if (fb !== undefined && nb !== undefined) {
-        if (backCalcFrom[fbKey] !== s.label && backCalcFrom[nbKey] !== s.label) {
-          calc[sbKey] = rd((fb - nb) / BP);
-          calcDeps[sbKey] = [fbKey, nbKey];
+      /* Spread Bid = (Far Bid - Near Ask) / BP (crossed) */
+      if (fb !== undefined && na !== undefined) {
+        if (backCalcFrom[fbKey] !== s.label && backCalcFrom[naKey] !== s.label) {
+          calc[sbKey] = rd((fb - na) / BP);
+          calcDeps[sbKey] = [fbKey, naKey];
         }
+      }
+    });
+
+    /* --- Spread from spreads ---
+       For each butterfly triple (t1,t2,t3): wide = s1 + s2
+       Sum (wide = s1 + s2): wide_ask = s1_ask + s2_ask, wide_bid = s1_bid + s2_bid
+       Diff (s2 = wide - s1): s2_ask = wide_ask - s1_bid, s2_bid = wide_bid - s1_ask
+       Diff (s1 = wide - s2): s1_ask = wide_ask - s2_bid, s1_bid = wide_bid - s2_ask
+       Only fill EMPTY spread cells. */
+    ALL_BUTTERFLIES.forEach(function(b) {
+      var s1aKey = 'spread_' + b.s1 + '_ask', s1bKey = 'spread_' + b.s1 + '_bid';
+      var s2aKey = 'spread_' + b.s2 + '_ask', s2bKey = 'spread_' + b.s2 + '_bid';
+      var wideLabel = sLabel(b.t1, b.t3);
+      var waKey = 'spread_' + wideLabel + '_ask', wbKey = 'spread_' + wideLabel + '_bid';
+      var s1a = ev(s1aKey), s1b = ev(s1bKey), s2a = ev(s2aKey), s2b = ev(s2bKey);
+      var wa = ev(waKey), wb = ev(wbKey);
+
+      /* Sum: wide = s1 + s2 (same-side) */
+      if (s1a !== undefined && s2a !== undefined && wa === undefined) {
+        calc[waKey] = rd(s1a + s2a);
+        calcDeps[waKey] = [s1aKey, s2aKey];
+      }
+      if (s1b !== undefined && s2b !== undefined && wb === undefined) {
+        calc[wbKey] = rd(s1b + s2b);
+        calcDeps[wbKey] = [s1bKey, s2bKey];
+      }
+
+      /* Re-read after possible sum calc */
+      wa = ev(waKey); wb = ev(wbKey);
+
+      /* Diff: s2 = wide - s1 (crossed) */
+      if (wa !== undefined && s1b !== undefined && ev(s2aKey) === undefined) {
+        calc[s2aKey] = rd(wa - s1b);
+        calcDeps[s2aKey] = [waKey, s1bKey];
+      }
+      if (wb !== undefined && s1a !== undefined && ev(s2bKey) === undefined) {
+        calc[s2bKey] = rd(wb - s1a);
+        calcDeps[s2bKey] = [wbKey, s1aKey];
+      }
+
+      /* Diff: s1 = wide - s2 (crossed) */
+      if (wa !== undefined && s2b !== undefined && ev(s1aKey) === undefined) {
+        calc[s1aKey] = rd(wa - s2b);
+        calcDeps[s1aKey] = [waKey, s2bKey];
+      }
+      if (wb !== undefined && s2a !== undefined && ev(s1bKey) === undefined) {
+        calc[s1bKey] = rd(wb - s2a);
+        calcDeps[s1bKey] = [wbKey, s2aKey];
       }
     });
 
@@ -398,21 +446,21 @@ function recalculate() {
     }
   });
 
-  /* Re-derive affected spreads from narrowed outrights (SAME-SIDE) */
+  /* Re-derive affected spreads from narrowed outrights (CROSSED) */
   ALL_SPREADS.forEach(function(s) {
     var ak = 'spread_' + s.label + '_ask', bk = 'spread_' + s.label + '_bid';
     if (calc[ak] !== undefined) {
-      var fa2 = gv('outright_' + s.far + '_ask'), na2 = gv('outright_' + s.near + '_ask');
-      if (fa2 !== undefined && na2 !== undefined) {
-        calc[ak] = rd((fa2 - na2) / BP);
-        calcDeps[ak] = ['outright_' + s.far + '_ask', 'outright_' + s.near + '_ask'];
+      var fa2 = gv('outright_' + s.far + '_ask'), nb2 = gv('outright_' + s.near + '_bid');
+      if (fa2 !== undefined && nb2 !== undefined) {
+        calc[ak] = rd((fa2 - nb2) / BP);
+        calcDeps[ak] = ['outright_' + s.far + '_ask', 'outright_' + s.near + '_bid'];
       }
     }
     if (calc[bk] !== undefined) {
-      var fb2 = gv('outright_' + s.far + '_bid'), nb2 = gv('outright_' + s.near + '_bid');
-      if (fb2 !== undefined && nb2 !== undefined) {
-        calc[bk] = rd((fb2 - nb2) / BP);
-        calcDeps[bk] = ['outright_' + s.far + '_bid', 'outright_' + s.near + '_bid'];
+      var fb2 = gv('outright_' + s.far + '_bid'), na2 = gv('outright_' + s.near + '_ask');
+      if (fb2 !== undefined && na2 !== undefined) {
+        calc[bk] = rd((fb2 - na2) / BP);
+        calcDeps[bk] = ['outright_' + s.far + '_bid', 'outright_' + s.near + '_ask'];
       }
     }
   });
@@ -582,7 +630,7 @@ function getLeafTrades(key) {
   
   var km;
   
-  /* --- SPREAD from outrights: spread = (far - near)/BP --- */
+  /* --- SPREAD from outrights: spread = (far_ask - near_bid)/BP or (far_bid - near_ask)/BP --- */
   km = key.match(/^spread_(.+)_(ask|bid)$/);
   if (km && deps.length === 2 && deps[0].indexOf('outright_') === 0 && deps[1].indexOf('outright_') === 0) {
     /* deps[0] = far (positive), deps[1] = near (negative/subtracted) */
@@ -593,6 +641,34 @@ function getLeafTrades(key) {
       nearLeaves[i].action = (nearLeaves[i].action === 'take') ? 'give' : 'take';
     }
     return result.concat(nearLeaves);
+  }
+
+  /* --- SPREAD from spreads: sum (same-side, both positive) or diff (crossed, second subtracted) --- */
+  km = key.match(/^spread_(.+)_(ask|bid)$/);
+  if (km && deps.length === 2 && deps[0].indexOf('spread_') === 0 && deps[1].indexOf('spread_') === 0) {
+    /* Detect if sum or difference:
+       Sum: both deps have same side as key (e.g. key=ask, deps both ask)
+       Diff: deps have opposite sides (e.g. key=ask, dep0=ask, dep1=bid → subtraction) */
+    var dep0side = deps[0].match(/_ask$/) ? 'ask' : 'bid';
+    var dep1side = deps[1].match(/_ask$/) ? 'ask' : 'bid';
+    var keySide = km[2];
+    
+    result = getLeafTrades(deps[0]);
+    var dep1Leaves = getLeafTrades(deps[1]);
+    
+    /* If dep1 has opposite side from key, it's subtracted → flip */
+    if (dep1side !== keySide) {
+      for (var i = 0; i < dep1Leaves.length; i++) {
+        dep1Leaves[i].action = (dep1Leaves[i].action === 'take') ? 'give' : 'take';
+      }
+    }
+    /* Also check dep0 — if it has opposite side from key, flip it too */
+    if (dep0side !== keySide) {
+      for (var i = 0; i < result.length; i++) {
+        result[i].action = (result[i].action === 'take') ? 'give' : 'take';
+      }
+    }
+    return result.concat(dep1Leaves);
   }
 
   /* --- BUTTERFLY from spreads: fly_ask = s1_ask - s2_bid, fly_bid = s1_bid - s2_ask --- */
