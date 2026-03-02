@@ -549,6 +549,25 @@ function recalculate() {
     }
   });
 
+  /* Auto-show spreads and butterflies that have values but aren't visible */
+  var needRerender = false;
+  ALL_SPREADS.forEach(function(s) {
+    if (!visSpreads[s.label]) {
+      var hasVal = (gv('spread_' + s.label + '_ask') !== undefined || gv('spread_' + s.label + '_bid') !== undefined);
+      if (hasVal) { visSpreads[s.label] = true; needRerender = true; }
+    }
+  });
+  ALL_BUTTERFLIES.forEach(function(b) {
+    if (!visButterflies[b.label]) {
+      var hasVal = (gv('butterfly_' + b.label + '_ask') !== undefined || gv('butterfly_' + b.label + '_bid') !== undefined);
+      if (hasVal) { visButterflies[b.label] = true; needRerender = true; }
+    }
+  });
+
+  if (needRerender) {
+    renderSpreads();
+    renderButterflies();
+  }
   updateAllInputs();
 }
 
@@ -844,6 +863,9 @@ function renderAll() { renderOutright(); renderSpreads(); renderButterflies(); r
 
 function doReset() {
   manual = {}; calc = {}; calcDeps = {}; backCalcFrom = {};
+  /* Reset visible lists to defaults */
+  visSpreads = {}; DEFAULT_SPREADS_LIST.forEach(function(s) { visSpreads[s] = true; });
+  visButterflies = {}; DEFAULT_BUTTERFLIES_LIST.forEach(function(s) { visButterflies[s] = true; });
   clearHL();
   document.getElementById('tradeDesc').textContent = 'Click on a calculated cell to see trade description';
   var allInputs = document.querySelectorAll('td input');
