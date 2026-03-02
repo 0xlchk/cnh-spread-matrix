@@ -580,9 +580,9 @@ function getTradeDesc(key) {
 }
 
 /* Recursively get leaf-level trades for a key.
-   Action is determined by the SIDE of the key: ask = Take, bid = Give.
-   When recursing, we follow calcDeps and determine each dep's action
-   based on its own side (ask/bid). */
+   Action is ALWAYS determined by the leaf's side: ask = Take, bid = Give.
+   No flipping — the formula direction only determines which deps are involved,
+   not the trade direction. */
 function getLeafTrades(key) {
   var val = gv(key);
   if (val === undefined) return [];
@@ -596,143 +596,10 @@ function getLeafTrades(key) {
     return [{ key: key, action: action, label: fmtKeyLabel(key), value: fmtKeyValue(key, val) }];
   }
 
-  /* For any calculated cell, recurse into its dependencies */
+  /* For any calculated cell, simply recurse into all dependencies.
+     Each leaf determines its own action from its side. */
   var deps = calcDeps[key];
   var result = [];
-  for (var i = 0; i < deps.length; i++) {
-    result = result.concat(getLeafTrades(deps[i]));
-  }
-
-  /* Handle subtraction: some formulas subtract a dep instead of adding.
-     We need to flip the action for subtracted deps.
-     
-     Spread from outrights (same-side): spread = far - near → near is subtracted
-     Butterfly from spreads (crossed): fly_ask = s1_ask - s2_bid → s2_bid is subtracted
-                                       fly_bid = s1_bid - s2_ask → s2_ask is subtracted
-     Near from far (cross-side): near_ask = far_ask - spread_bid → spread_bid is subtracted
-                                 near_bid = far_bid - spread_ask → spread_ask is subtracted
-     Back-calc spread from butterfly: s2_ask = s1_ask - fly_bid → fly_bid is subtracted
-                                      s2_bid = s1_bid - fly_ask → fly_ask is subtracted
-     
-     In all subtraction cases, the SECOND dep in calcDeps is the one subtracted.
-     Convention: calcDeps[key] = [addedDep, subtractedDep] for subtraction formulas.
-     For addition formulas (far = near + spread, 1x3 = 1x2 + 2x3), both are added.
-     
-     We detect subtraction formulas by checking: is this a spread from outrights?
-     a butterfly? a near-from-far calc? etc. */
-  
-  /* Actually, simpler approach: rather than trying to detect formula type here,
-     we already set calcDeps correctly in the engine. The issue is just knowing
-     which deps are subtracted. Let's use a different approach:
-     
-     Recompute the formula to determine sign of each dep. */
-  result = [];
-  
-  var km;
-  
-  /* --- SPREAD from outrights: spread = (far_ask - near_bid)/BP or (far_bid - near_ask)/BP --- */
-  km = key.match(/^spread_(.+)_(ask|bid)$/);
-  if (km && deps.length === 2 && deps[0].indexOf('outright_') === 0 && deps[1].indexOf('outright_') === 0) {
-    /* deps[0] = far (positive), deps[1] = near (negative/subtracted) */
-    result = getLeafTrades(deps[0]);
-    var nearLeaves = getLeafTrades(deps[1]);
-    /* Flip action for subtracted (near) side */
-    for (var i = 0; i < nearLeaves.length; i++) {
-      nearLeaves[i].action = (nearLeaves[i].action === 'take') ? 'give' : 'take';
-    }
-    return result.concat(nearLeaves);
-  }
-
-  /* --- SPREAD from spreads: sum (same-side, both positive) or diff (crossed, second subtracted) --- */
-  km = key.match(/^spread_(.+)_(ask|bid)$/);
-  if (km && deps.length === 2 && deps[0].indexOf('spread_') === 0 && deps[1].indexOf('spread_') === 0) {
-    /* Detect if sum or difference:
-       Sum: both deps have same side as key (e.g. key=ask, deps both ask)
-       Diff: deps have opposite sides (e.g. key=ask, dep0=ask, dep1=bid → subtraction) */
-    var dep0side = deps[0].match(/_ask$/) ? 'ask' : 'bid';
-    var dep1side = deps[1].match(/_ask$/) ? 'ask' : 'bid';
-    var keySide = km[2];
-    
-    result = getLeafTrades(deps[0]);
-    var dep1Leaves = getLeafTrades(deps[1]);
-    
-    /* If dep1 has opposite side from key, it's subtracted → flip */
-    if (dep1side !== keySide) {
-      for (var i = 0; i < dep1Leaves.length; i++) {
-        dep1Leaves[i].action = (dep1Leaves[i].action === 'take') ? 'give' : 'take';
-      }
-    }
-    /* Also check dep0 — if it has opposite side from key, flip it too */
-    if (dep0side !== keySide) {
-      for (var i = 0; i < result.length; i++) {
-        result[i].action = (result[i].action === 'take') ? 'give' : 'take';
-      }
-    }
-    return result.concat(dep1Leaves);
-  }
-
-  /* --- BUTTERFLY from spreads: fly_ask = s1_ask - s2_bid, fly_bid = s1_bid - s2_ask --- */
-  km = key.match(/^butterfly_(.+)_(ask|bid)$/);
-  if (km && deps.length === 2 && deps[0].indexOf('spread_') === 0 && deps[1].indexOf('spread_') === 0) {
-    /* deps[0] = s1 (positive), deps[1] = s2 (subtracted) */
-    result = getLeafTrades(deps[0]);
-    var s2Leaves = getLeafTrades(deps[1]);
-    for (var i = 0; i < s2Leaves.length; i++) {
-      s2Leaves[i].action = (s2Leaves[i].action === 'take') ? 'give' : 'take';
-    }
-    return result.concat(s2Leaves);
-  }
-
-  /* --- OUTRIGHT back-calc --- */
-  km = key.match(/^outright_(.+)_(ask|bid)$/);
-  if (km && deps.length === 2) {
-    var tenor = km[1];
-    var outrightDep = null, spreadDep = null;
-    for (var i = 0; i < deps.length; i++) {
-      if (deps[i].indexOf('spread_') === 0) spreadDep = deps[i];
-      else outrightDep = deps[i];
-    }
-    if (outrightDep && spreadDep) {
-      var sdm = spreadDep.match(/^spread_(.+)_(ask|bid)$/);
-      if (sdm) {
-        var sInfo = SP[sdm[1]];
-        if (sInfo) {
-          if (sInfo.far === tenor) {
-            /* far = near + spread → both positive (addition) */
-            return getLeafTrades(outrightDep).concat(getLeafTrades(spreadDep));
-          } else {
-            /* near = far - spread → spread is subtracted */
-            var spreadLeaves = getLeafTrades(spreadDep);
-            for (var i = 0; i < spreadLeaves.length; i++) {
-              spreadLeaves[i].action = (spreadLeaves[i].action === 'take') ? 'give' : 'take';
-            }
-            return getLeafTrades(outrightDep).concat(spreadLeaves);
-          }
-        }
-      }
-    }
-  }
-  
-  /* --- SPREAD from butterfly back-calc: s2 = s1 - fly → fly is subtracted --- */
-  km = key.match(/^spread_(.+)_(ask|bid)$/);
-  if (km && deps.length === 2) {
-    var hasFly = false, flyIdx = -1;
-    for (var i = 0; i < deps.length; i++) {
-      if (deps[i].indexOf('butterfly_') === 0) { hasFly = true; flyIdx = i; }
-    }
-    if (hasFly) {
-      var otherIdx = 1 - flyIdx;
-      result = getLeafTrades(deps[otherIdx]);
-      var flyLeaves = getLeafTrades(deps[flyIdx]);
-      for (var i = 0; i < flyLeaves.length; i++) {
-        flyLeaves[i].action = (flyLeaves[i].action === 'take') ? 'give' : 'take';
-      }
-      return result.concat(flyLeaves);
-    }
-  }
-
-  /* Fallback: just recurse without flipping */
-  result = [];
   for (var i = 0; i < deps.length; i++) {
     result = result.concat(getLeafTrades(deps[i]));
   }
@@ -775,13 +642,18 @@ function highlightDeps(key) {
   var inp = document.querySelector('input[data-key="' + key + '"]');
   if (inp) { inp.classList.add('highlight-target'); hlKeys.push(key); }
 
-  /* Get FULL recursive dependency chain */
-  var allSources = getAllSourceKeys(key);
-  for (var i = 0; i < allSources.length; i++) {
-    var el = document.querySelector('input[data-key="' + allSources[i] + '"]');
-    if (el && gv(allSources[i]) !== undefined) {
+  /* Highlight only the leaf-level inputs that appear in the trade description */
+  var leaves = getLeafTrades(key);
+  if (!leaves) return;
+  var seen = {};
+  for (var i = 0; i < leaves.length; i++) {
+    var lk = leaves[i].key;
+    if (seen[lk] || lk === key) continue;
+    seen[lk] = true;
+    var el = document.querySelector('input[data-key="' + lk + '"]');
+    if (el && gv(lk) !== undefined) {
       el.classList.add('highlight-source');
-      hlKeys.push(allSources[i]);
+      hlKeys.push(lk);
     }
   }
 }
