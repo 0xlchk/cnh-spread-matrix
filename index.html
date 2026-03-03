@@ -94,7 +94,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v1.9</span>
+  <span class="version">v1.8</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -389,41 +389,38 @@ function recalculate() {
       }
     });
 
-    /* --- Back-calc spreads from butterflies, EMPTY cells only ---
-       Rule 6: B = S1 - S2
-       S2 = S1 - B  → minus rule: S2_ask = S1_ask - B_bid,  S2_bid = S1_bid - B_ask
-       S1 = B + S2   → plus rule:  S1_ask = B_ask + S2_ask,  S1_bid = B_bid + S2_bid */
+    /* --- Back-calc spreads from MANUAL butterflies, EMPTY cells only --- */
     ALL_BUTTERFLIES.forEach(function(b) {
-      var baKey = 'butterfly_' + b.label + '_ask', bbKey = 'butterfly_' + b.label + '_bid';
-      var ba = ev(baKey), bb = ev(bbKey);
-      if (ba === undefined && bb === undefined) return;
-
-      var s1aKey = 'spread_' + b.s1 + '_ask', s1bKey = 'spread_' + b.s1 + '_bid';
-      var s2aKey = 'spread_' + b.s2 + '_ask', s2bKey = 'spread_' + b.s2 + '_bid';
-      var s1a = ev(s1aKey), s1b = ev(s1bKey), s2a = ev(s2aKey), s2b = ev(s2bKey);
-
-      /* S2 = S1 - B (minus rule) */
-      if (s1a !== undefined && bb !== undefined && ev(s2aKey) === undefined) {
-        calc[s2aKey] = rd(s1a - bb);
-        calcDeps[s2aKey] = [s1aKey, bbKey];
-      }
-      if (s1b !== undefined && ba !== undefined && ev(s2bKey) === undefined) {
-        calc[s2bKey] = rd(s1b - ba);
-        calcDeps[s2bKey] = [s1bKey, baKey];
-      }
-
-      /* Re-read s2 after possible calc */
-      s2a = ev(s2aKey); s2b = ev(s2bKey);
-
-      /* S1 = B + S2 (plus rule) */
-      if (ba !== undefined && s2a !== undefined && ev(s1aKey) === undefined) {
-        calc[s1aKey] = rd(ba + s2a);
-        calcDeps[s1aKey] = [baKey, s2aKey];
-      }
-      if (bb !== undefined && s2b !== undefined && ev(s1bKey) === undefined) {
-        calc[s1bKey] = rd(bb + s2b);
-        calcDeps[s1bKey] = [bbKey, s2bKey];
-      }
+      ['ask', 'bid'].forEach(function(side) {
+        var bk = 'butterfly_' + b.label + '_' + side;
+        var bv = manual[bk];
+        if (bv === undefined) return;
+        if (side === 'ask') {
+          var s1v = ev('spread_' + b.s1 + '_ask');
+          var s2bk = 'spread_' + b.s2 + '_bid';
+          if (ev(s2bk) === undefined && s1v !== undefined) {
+            calc[s2bk] = rd(s1v - bv);
+            calcDeps[s2bk] = ['spread_' + b.s1 + '_ask', bk];
+          }
+          var s1ak = 'spread_' + b.s1 + '_ask';
+          if (ev(s1ak) === undefined && ev(s2bk) !== undefined) {
+            calc[s1ak] = rd(bv + ev(s2bk));
+            calcDeps[s1ak] = [bk, s2bk];
+          }
+        } else {
+          var s1v2 = ev('spread_' + b.s1 + '_bid');
+          var s2ak = 'spread_' + b.s2 + '_ask';
+          if (ev(s2ak) === undefined && s1v2 !== undefined) {
+            calc[s2ak] = rd(s1v2 - bv);
+            calcDeps[s2ak] = ['spread_' + b.s1 + '_bid', bk];
+          }
+          var s1bk = 'spread_' + b.s1 + '_bid';
+          if (ev(s1bk) === undefined && ev(s2ak) !== undefined) {
+            calc[s1bk] = rd(bv + ev(s2ak));
+            calcDeps[s1bk] = [bk, s2ak];
+          }
+        }
+      });
     });
 
     /* --- Derive outrights from ANY available spread (manual or calc) ---
