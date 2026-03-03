@@ -93,7 +93,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v1.1</span>
+  <span class="version">v1.2</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -449,6 +449,127 @@ function recalculate() {
         }
       }
     }
+
+    /* --- Reverse chaining: spread + butterfly → new butterfly ---
+       If spread(A,B) and fly(B,C,D) exist → create fly(A,C,D)  [near tenor match with t1]
+       If spread(A,B) and fly(C,D,A) exist → create fly(C,D,B)  [far tenor match with t3]
+       Also handles the reverse directions:
+       If spread(A,B) and fly(A,C,D) exist → back-derive fly(B,C,D) would need spread bid
+       Crossed pricing: new_fly_ask uses spread_ask and fly components crossed appropriately
+       
+       Since fly = s1 - s2 (crossed), and we're substituting a tenor via a spread,
+       the new fly inherits the structure with the replaced tenor.
+       
+       Forward: spread(A,B).near=A matches fly.t1=A → new fly with t1=B? No.
+       Per examples: spread(1,3) + fly(3,4,5) → fly(1,4,5). spread.far matches fly.t1.
+       So: spread.far == fly.t1 → new fly(spread.near, fly.t2, fly.t3)
+       And: spread.near == fly.t3 → new fly(fly.t1, fly.t2, spread.far)
+       
+       Pricing for case spread.far == fly.t1:
+         Original fly(B,C,D): s1=spread(B,C), s2=spread(C,D)
+         New fly(A,C,D): s1=spread(A,C), s2=spread(C,D) — same s2, different s1
+         spread(A,C) = spread(A,B) + spread(B,C) (same-side for ask, same-side for bid)
+         So: new_fly_ask = (spread(A,B)_ask + fly_s1_ask) - fly_s2_bid  ... but that's just
+         new_s1_ask - s2_bid where new_s1 = spread(A,B) + spread(B,C)
+         Simpler: new_fly_ask = spread(A,B)_ask + fly(B,C,D)_ask  ... NO, need crossing.
+         
+         Actually: fly_ask = s1_ask - s2_bid (crossed). For the new fly:
+         new_fly(A,C,D)_ask = spread(A,C)_ask - spread(C,D)_bid
+         spread(A,C)_ask = spread(A,B)_ask + spread(B,C)_ask (same-side sum)
+         So new_fly_ask = spread(A,B)_ask + spread(B,C)_ask - spread(C,D)_bid
+                        = spread(A,B)_ask + fly(B,C,D)_ask  (since fly_ask = s1_ask - s2_bid)
+         YES! new_fly_ask = spread_ask + old_fly_ask (same-side)
+              new_fly_bid = spread_bid + old_fly_bid (same-side)
+       
+       Pricing for case spread.near == fly.t3:
+         spread(A,B), fly(C,D,A) → fly(C,D,B)
+         Original fly(C,D,A): s1=spread(C,D), s2=spread(D,A)
+         New fly(C,D,B): s1=spread(C,D), s2=spread(D,B) — same s1, different s2
+         spread(D,B) = spread(D,A) + spread(A,B) (same-side sum)
+         new_fly(C,D,B)_ask = s1_ask - new_s2_bid = spread(C,D)_ask - (spread(D,A)_bid + spread(A,B)_bid)
+                            = (spread(C,D)_ask - spread(D,A)_bid) - spread(A,B)_bid
+                            = fly(C,D,A)_ask - spread(A,B)_bid  (crossed!)
+         So: new_fly_ask = old_fly_ask - spread_bid (crossed)
+              new_fly_bid = old_fly_bid - spread_ask (crossed)
+    */
+    ALL_SPREADS.forEach(function(sp) {
+      var spaKey = 'spread_' + sp.label + '_ask', spbKey = 'spread_' + sp.label + '_bid';
+      var spa = ev(spaKey), spb = ev(spbKey);
+      if (spa === undefined && spb === undefined) return;
+
+      ALL_BUTTERFLIES.forEach(function(bf) {
+        var bfaKey = 'butterfly_' + bf.label + '_ask', bfbKey = 'butterfly_' + bf.label + '_bid';
+        var bfa = ev(bfaKey), bfb = ev(bfbKey);
+        if (bfa === undefined && bfb === undefined) return;
+
+        /* Case 1: spread.far == fly.t1 → new fly(spread.near, fly.t2, fly.t3) */
+        if (sp.far === bf.t1 && TENORS.indexOf(sp.near) < TENORS.indexOf(bf.t2)) {
+          var newLabel = bLabel(sp.near, bf.t2, bf.t3);
+          if (!BF[newLabel]) return; /* must be a valid tenor combination */
+          var nfaKey = 'butterfly_' + newLabel + '_ask', nfbKey = 'butterfly_' + newLabel + '_bid';
+          /* new_fly_ask = spread_ask + old_fly_ask (same-side) */
+          if (spa !== undefined && bfa !== undefined && ev(nfaKey) === undefined) {
+            calc[nfaKey] = rd(spa + bfa);
+            calcDeps[nfaKey] = [spaKey, bfaKey];
+          }
+          /* new_fly_bid = spread_bid + old_fly_bid (same-side) */
+          if (spb !== undefined && bfb !== undefined && ev(nfbKey) === undefined) {
+            calc[nfbKey] = rd(spb + bfb);
+            calcDeps[nfbKey] = [spbKey, bfbKey];
+          }
+        }
+
+        /* Case 2: spread.near == fly.t3 → new fly(fly.t1, fly.t2, spread.far) */
+        if (sp.near === bf.t3 && TENORS.indexOf(bf.t2) < TENORS.indexOf(sp.far)) {
+          var newLabel2 = bLabel(bf.t1, bf.t2, sp.far);
+          if (!BF[newLabel2]) return;
+          var nfaKey2 = 'butterfly_' + newLabel2 + '_ask', nfbKey2 = 'butterfly_' + newLabel2 + '_bid';
+          /* new_fly_ask = old_fly_ask - spread_bid (crossed) */
+          if (bfa !== undefined && spb !== undefined && ev(nfaKey2) === undefined) {
+            calc[nfaKey2] = rd(bfa - spb);
+            calcDeps[nfaKey2] = [bfaKey, spbKey];
+          }
+          /* new_fly_bid = old_fly_bid - spread_ask (crossed) */
+          if (bfb !== undefined && spa !== undefined && ev(nfbKey2) === undefined) {
+            calc[nfbKey2] = rd(bfb - spa);
+            calcDeps[nfbKey2] = [bfbKey, spaKey];
+          }
+        }
+
+        /* Case 3: spread.near == fly.t1 → new fly(spread.far, fly.t2, fly.t3) 
+           (reverse of case 1: derive from the other direction)
+           new_fly_ask = old_fly_ask - spread_bid (crossed) */
+        if (sp.near === bf.t1 && TENORS.indexOf(sp.far) < TENORS.indexOf(bf.t2)) {
+          var newLabel3 = bLabel(sp.far, bf.t2, bf.t3);
+          if (!BF[newLabel3]) return;
+          var nfaKey3 = 'butterfly_' + newLabel3 + '_ask', nfbKey3 = 'butterfly_' + newLabel3 + '_bid';
+          if (bfa !== undefined && spb !== undefined && ev(nfaKey3) === undefined) {
+            calc[nfaKey3] = rd(bfa - spb);
+            calcDeps[nfaKey3] = [bfaKey, spbKey];
+          }
+          if (bfb !== undefined && spa !== undefined && ev(nfbKey3) === undefined) {
+            calc[nfbKey3] = rd(bfb - spa);
+            calcDeps[nfbKey3] = [bfbKey, spaKey];
+          }
+        }
+
+        /* Case 4: spread.far == fly.t3 → new fly(fly.t1, fly.t2, spread.near)
+           new_fly_ask = old_fly_ask + spread_ask (same-side) */
+        if (sp.far === bf.t3 && TENORS.indexOf(bf.t2) < TENORS.indexOf(sp.near)) {
+          var newLabel4 = bLabel(bf.t1, bf.t2, sp.near);
+          if (!BF[newLabel4]) return;
+          var nfaKey4 = 'butterfly_' + newLabel4 + '_ask', nfbKey4 = 'butterfly_' + newLabel4 + '_bid';
+          if (spa !== undefined && bfa !== undefined && ev(nfaKey4) === undefined) {
+            calc[nfaKey4] = rd(bfa + spa);
+            calcDeps[nfaKey4] = [bfaKey, spaKey];
+          }
+          if (spb !== undefined && bfb !== undefined && ev(nfbKey4) === undefined) {
+            calc[nfbKey4] = rd(bfb + spb);
+            calcDeps[nfbKey4] = [bfbKey, spbKey];
+          }
+        }
+      });
+    });
 
     /* Auto-show any rows that gained values this pass so subsequent passes can use them */
     autoShowComputed();
