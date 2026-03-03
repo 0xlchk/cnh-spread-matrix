@@ -45,13 +45,13 @@
   .filter-btn:hover { background: var(--accent-light); border-color: var(--accent); }
   .reset-btn { padding: 7px 14px; font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; border: 1px solid var(--danger); background: #fff5f5; color: var(--danger); border-radius: 6px; cursor: pointer; transition: all 0.15s; margin-left: auto; box-shadow: var(--shadow-sm); }
   .reset-btn:hover { background: var(--danger); color: #fff; }
-  .matrix-container { display: flex; gap: 8px; align-items: flex-start; width: 100%; }
-  .section { background: var(--card-bg); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--cell-border); flex: 1; min-width: 0; }
+  .matrix-container { display: flex; gap: 12px; align-items: flex-start; }
+  .section { background: var(--card-bg); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--cell-border); }
   table { border-collapse: collapse; font-size: 13px; width: 100%; }
   th { background: var(--accent); color: var(--header-text); padding: 6px 8px; text-align: center; font-weight: 600; font-size: 11px; font-family: 'Inter', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; border: none; border-bottom: 2px solid rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 2; }
   td { border: 1px solid var(--cell-border); border-left: none; border-right: none; padding: 0; text-align: center; height: 26px; }
   td.label-cell { background: var(--label-bg); color: var(--label-text); font-weight: 600; font-size: 11px; font-family: 'JetBrains Mono', monospace; padding: 1px 4px; white-space: nowrap; border-right: 2px solid #e2d9b8; }
-  td input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 400; padding: 1px 2px; outline: none; color: var(--text); transition: background 0.1s; }
+  td input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 400; padding: 1px 2px; outline: none; min-width: 26px; color: var(--text); transition: background 0.1s; }
   td input:focus { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
   td input.manual { font-weight: 700; background: var(--input-bg); }
   td input.calculated { font-weight: 400; background: var(--calc-bg); }
@@ -87,9 +87,6 @@
   .watermark { position: fixed; bottom: 12px; right: 20px; font-size: 12px; color: #a0aec0; font-weight: 500; font-family: 'Inter', sans-serif; cursor: pointer; transition: color 0.2s; text-decoration: none; z-index: 10; }
   .watermark:hover { color: var(--accent); }
 
-  @media (max-width: 768px) {
-    body { padding: 8px; font-size: 12px; padding-bottom: 50px; }
-    .top-bar { padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
     .top-bar .title { font-size: 15px; }
     .top-bar .subtitle { font-size: 11px; padding-left: 8px; }
     .controls-bar { flex-wrap: wrap; gap: 6px; }
@@ -104,8 +101,6 @@
     .legend { left: 8px; gap: 8px; padding: 6px 10px; font-size: 10px; flex-wrap: wrap; }
     .filter-panel { min-width: 200px; }
   }
-  @media (max-width: 480px) {
-    .top-bar .subtitle { display: none; }
     .trade-bar-label { font-size: 10px; }
     .trade-bar-text { font-size: 11px; }
     td.label-cell { font-size: 9px; }
@@ -119,7 +114,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v1.6</span>
+  <span class="version">v1.7</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
