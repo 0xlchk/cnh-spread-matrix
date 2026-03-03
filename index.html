@@ -94,7 +94,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v2.2</span>
+  <span class="version">v2.3</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -170,6 +170,7 @@ var manual = {};
 var calc = {};
 var calcDeps = {};
 var backCalcFrom = {};
+var rule9Protected = {};
 
 function rd(v) { return Math.round(v * 100000) / 100000; }
 
@@ -181,6 +182,8 @@ function calcSet(k, v, deps) {
   if (existing === undefined) {
     calc[k] = v; calcDeps[k] = deps; return true;
   }
+  /* Rule 9 values are protected - no overwrite allowed */
+  if (rule9Protected[k]) return false;
   var isAsk = (k.indexOf('_ask') !== -1);
   var isTighter = isAsk ? (v < existing) : (v > existing);
   if (isTighter) {
@@ -242,6 +245,7 @@ function recalculate() {
   calc = {};
   calcDeps = {};
   backCalcFrom = {};
+  rule9Protected = {};
 
   for (var pass = 0; pass < 5; pass++) {
 
@@ -537,17 +541,21 @@ function recalculate() {
       /* S(T1,T2) = (wide + fly) / 2 */
       if (wa !== undefined && ba !== undefined) {
         calcSet(s1aKey, rd((wa + ba) / 2), [waKey, baKey]);
+        rule9Protected[s1aKey] = true;
       }
       if (wb !== undefined && bb !== undefined) {
         calcSet(s1bKey, rd((wb + bb) / 2), [wbKey, bbKey]);
+        rule9Protected[s1bKey] = true;
       }
 
       /* S(T2,T3) = (wide - fly) / 2 */
       if (wa !== undefined && bb !== undefined) {
         calcSet(s2aKey, rd((wa - bb) / 2), [waKey, bbKey]);
+        rule9Protected[s2aKey] = true;
       }
       if (wb !== undefined && ba !== undefined) {
         calcSet(s2bKey, rd((wb - ba) / 2), [wbKey, baKey]);
+        rule9Protected[s2bKey] = true;
       }
     });
 
@@ -1236,7 +1244,7 @@ function renderButterflies() {
 function renderAll() { renderOutright(); renderSpreads(); renderButterflies(); recalculate(); }
 
 function doReset() {
-  manual = {}; calc = {}; calcDeps = {}; backCalcFrom = {};
+  manual = {}; calc = {}; calcDeps = {}; backCalcFrom = {}; rule9Protected = {};
   /* Reset visible lists to defaults */
   visSpreads = {}; DEFAULT_SPREADS_LIST.forEach(function(s) { visSpreads[s] = true; });
   visButterflies = {}; DEFAULT_BUTTERFLIES_LIST.forEach(function(s) { visButterflies[s] = true; });
