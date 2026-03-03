@@ -94,7 +94,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v2.0</span>
+  <span class="version">v2.1</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -515,6 +515,39 @@ function recalculate() {
         if (l1b !== undefined && l2b !== undefined) {
           calcSet(tbKey, rd(l1b + l2b), ['spread_' + leg1Label + '_bid', 'spread_' + leg2Label + '_bid']);
         }
+      }
+    });
+
+    /* --- Rule 9: Spread split by butterfly ---
+       When S(T1,T3) and B(T1,T2,T3) both exist, solve for S(T1,T2) and S(T2,T3):
+         S(T1,T2)_ask = (S(T1,T3)_ask + B_ask) / 2
+         S(T1,T2)_bid = (S(T1,T3)_bid + B_bid) / 2
+         S(T2,T3)_ask = (S(T1,T3)_ask - B_bid) / 2
+         S(T2,T3)_bid = (S(T1,T3)_bid - B_ask) / 2
+       Derived from simultaneous: S1 + S2 = wide, S1 - S2 = fly */
+    ALL_BUTTERFLIES.forEach(function(b) {
+      var wideLabel = sLabel(b.t1, b.t3);
+      var waKey = 'spread_' + wideLabel + '_ask', wbKey = 'spread_' + wideLabel + '_bid';
+      var baKey = 'butterfly_' + b.label + '_ask', bbKey = 'butterfly_' + b.label + '_bid';
+      var s1aKey = 'spread_' + b.s1 + '_ask', s1bKey = 'spread_' + b.s1 + '_bid';
+      var s2aKey = 'spread_' + b.s2 + '_ask', s2bKey = 'spread_' + b.s2 + '_bid';
+
+      var wa = ev(waKey), wb = ev(wbKey), ba = ev(baKey), bb = ev(bbKey);
+
+      /* S(T1,T2) = (wide + fly) / 2 */
+      if (wa !== undefined && ba !== undefined) {
+        calcSet(s1aKey, rd((wa + ba) / 2), [waKey, baKey]);
+      }
+      if (wb !== undefined && bb !== undefined) {
+        calcSet(s1bKey, rd((wb + bb) / 2), [wbKey, bbKey]);
+      }
+
+      /* S(T2,T3) = (wide - fly) / 2 */
+      if (wa !== undefined && bb !== undefined) {
+        calcSet(s2aKey, rd((wa - bb) / 2), [waKey, bbKey]);
+      }
+      if (wb !== undefined && ba !== undefined) {
+        calcSet(s2bKey, rd((wb - ba) / 2), [wbKey, baKey]);
       }
     });
 
