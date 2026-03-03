@@ -93,7 +93,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v1.3</span>
+  <span class="version">v1.4</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -963,7 +963,8 @@ function mkInput(key) {
   var wasCalcOnly = false;
 
   inp.addEventListener('keydown', function(e) {
-    if (['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].indexOf(e.key) !== -1) return;
+    if (e.key === 'Enter') { inp.blur(); return; }
+    if (['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].indexOf(e.key) !== -1) return;
     if (e.key === 'Escape') {
       delete manual[key]; recalculate(); forceUpdateCell(inp, key); inp.blur(); return;
     }
