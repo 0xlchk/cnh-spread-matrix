@@ -93,7 +93,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v1.2</span>
+  <span class="version">v1.3</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -570,6 +570,76 @@ function recalculate() {
         }
       });
     });
+
+    /* --- FLY→SPREAD decomposition ---
+       Two butterflies sharing (t1, t2) with different t3:
+       fly(t1,t2,A) and fly(t1,t2,B) → spread(A,B)
+       spread_ask = fly_short_ask - fly_long_bid (crossed, short=smaller t3)
+       spread_bid = fly_short_bid - fly_long_ask (crossed) */
+    for (var di = 0; di < ALL_BUTTERFLIES.length; di++) {
+      for (var dj = di + 1; dj < ALL_BUTTERFLIES.length; dj++) {
+        var d1 = ALL_BUTTERFLIES[di], d2 = ALL_BUTTERFLIES[dj];
+        if (d1.t1 !== d2.t1 || d1.t2 !== d2.t2) continue;
+        /* d1.t3 < d2.t3 since ALL_BUTTERFLIES is sorted */
+        var dspLabel = sLabel(d1.t3, d2.t3);
+        if (!SP[dspLabel]) continue;
+        var dsaKey = 'spread_' + dspLabel + '_ask', dsbKey = 'spread_' + dspLabel + '_bid';
+        var df1a = ev('butterfly_' + d1.label + '_ask'), df1b = ev('butterfly_' + d1.label + '_bid');
+        var df2a = ev('butterfly_' + d2.label + '_ask'), df2b = ev('butterfly_' + d2.label + '_bid');
+        /* spread_ask = short_fly_ask - long_fly_bid (crossed) */
+        if (df1a !== undefined && df2b !== undefined && ev(dsaKey) === undefined) {
+          calc[dsaKey] = rd(df1a - df2b);
+          calcDeps[dsaKey] = ['butterfly_' + d1.label + '_ask', 'butterfly_' + d2.label + '_bid'];
+        }
+        /* spread_bid = short_fly_bid - long_fly_ask (crossed) */
+        if (df1b !== undefined && df2a !== undefined && ev(dsbKey) === undefined) {
+          calc[dsbKey] = rd(df1b - df2a);
+          calcDeps[dsbKey] = ['butterfly_' + d1.label + '_bid', 'butterfly_' + d2.label + '_ask'];
+        }
+      }
+    }
+
+    /* --- SPREAD→FLY decomposition ---
+       Two spreads that touch: spread(A,B) + spread(B,C) → butterfly(A,B,C)
+       fly_ask = s1_ask - s2_bid (crossed, per existing butterfly formula) 
+       BUT ONLY fill empty cells — don't overwrite existing values */
+    for (var si = 0; si < ALL_SPREADS.length; si++) {
+      for (var sj = si + 1; sj < ALL_SPREADS.length; sj++) {
+        var sp1 = ALL_SPREADS[si], sp2 = ALL_SPREADS[sj];
+        /* Check if sp1.far == sp2.near (touching) */
+        if (sp1.far === sp2.near) {
+          var dbfLabel = bLabel(sp1.near, sp1.far, sp2.far);
+          if (!BF[dbfLabel]) continue;
+          var dbaKey = 'butterfly_' + dbfLabel + '_ask', dbbKey = 'butterfly_' + dbfLabel + '_bid';
+          var dsp1a = ev('spread_' + sp1.label + '_ask'), dsp1b = ev('spread_' + sp1.label + '_bid');
+          var dsp2a = ev('spread_' + sp2.label + '_ask'), dsp2b = ev('spread_' + sp2.label + '_bid');
+          if (dsp1a !== undefined && dsp2b !== undefined && ev(dbaKey) === undefined) {
+            calc[dbaKey] = rd(dsp1a - dsp2b);
+            calcDeps[dbaKey] = ['spread_' + sp1.label + '_ask', 'spread_' + sp2.label + '_bid'];
+          }
+          if (dsp1b !== undefined && dsp2a !== undefined && ev(dbbKey) === undefined) {
+            calc[dbbKey] = rd(dsp1b - dsp2a);
+            calcDeps[dbbKey] = ['spread_' + sp1.label + '_bid', 'spread_' + sp2.label + '_ask'];
+          }
+        }
+        /* Also check sp2.far == sp1.near (reverse touch) */
+        if (sp2.far === sp1.near) {
+          var dbfLabel2 = bLabel(sp2.near, sp2.far, sp1.far);
+          if (!BF[dbfLabel2]) continue;
+          var dbaKey2 = 'butterfly_' + dbfLabel2 + '_ask', dbbKey2 = 'butterfly_' + dbfLabel2 + '_bid';
+          var dsp2a2 = ev('spread_' + sp2.label + '_ask'), dsp2b2 = ev('spread_' + sp2.label + '_bid');
+          var dsp1a2 = ev('spread_' + sp1.label + '_ask'), dsp1b2 = ev('spread_' + sp1.label + '_bid');
+          if (dsp2a2 !== undefined && dsp1b2 !== undefined && ev(dbaKey2) === undefined) {
+            calc[dbaKey2] = rd(dsp2a2 - dsp1b2);
+            calcDeps[dbaKey2] = ['spread_' + sp2.label + '_ask', 'spread_' + sp1.label + '_bid'];
+          }
+          if (dsp2b2 !== undefined && dsp1a2 !== undefined && ev(dbbKey2) === undefined) {
+            calc[dbbKey2] = rd(dsp2b2 - dsp1a2);
+            calcDeps[dbbKey2] = ['spread_' + sp2.label + '_bid', 'spread_' + sp1.label + '_ask'];
+          }
+        }
+      }
+    }
 
     /* Auto-show any rows that gained values this pass so subsequent passes can use them */
     autoShowComputed();
