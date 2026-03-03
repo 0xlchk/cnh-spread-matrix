@@ -94,7 +94,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v1.8</span>
+  <span class="version">v1.9</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -173,6 +173,22 @@ var backCalcFrom = {};
 
 function rd(v) { return Math.round(v * 100000) / 100000; }
 
+/* Tightest-price write: only update calc[k] if new value is tighter
+   (lower ask, higher bid) than existing calc value.
+   Returns true if value was written. */
+function calcSet(k, v, deps) {
+  var existing = calc[k];
+  if (existing === undefined) {
+    calc[k] = v; calcDeps[k] = deps; return true;
+  }
+  var isAsk = (k.indexOf('_ask') !== -1);
+  var isTighter = isAsk ? (v < existing) : (v > existing);
+  if (isTighter) {
+    calc[k] = v; calcDeps[k] = deps; return true;
+  }
+  return false;
+}
+
 function gv(k) {
   var m = manual[k], c = calc[k];
   if (m !== undefined && c !== undefined) {
@@ -240,15 +256,13 @@ function recalculate() {
          BUT: don't use an outright that was back-calculated from THIS spread */
       if (fa !== undefined && nb !== undefined) {
         if (backCalcFrom[faKey] !== s.label && backCalcFrom[nbKey] !== s.label) {
-          calc[saKey] = rd((fa - nb) / BP);
-          calcDeps[saKey] = [faKey, nbKey];
+          calcSet(saKey, rd((fa - nb) / BP), [faKey, nbKey]);
         }
       }
       /* Spread Bid = (Far Bid - Near Ask) / BP (crossed) */
       if (fb !== undefined && na !== undefined) {
         if (backCalcFrom[fbKey] !== s.label && backCalcFrom[naKey] !== s.label) {
-          calc[sbKey] = rd((fb - na) / BP);
-          calcDeps[sbKey] = [fbKey, naKey];
+          calcSet(sbKey, rd((fb - na) / BP), [fbKey, naKey]);
         }
       }
     });
@@ -269,35 +283,29 @@ function recalculate() {
 
       /* Sum: wide = s1 + s2 (same-side) */
       if (s1a !== undefined && s2a !== undefined && wa === undefined) {
-        calc[waKey] = rd(s1a + s2a);
-        calcDeps[waKey] = [s1aKey, s2aKey];
+        calcSet(waKey, rd(s1a + s2a), [s1aKey, s2aKey]);
       }
       if (s1b !== undefined && s2b !== undefined && wb === undefined) {
-        calc[wbKey] = rd(s1b + s2b);
-        calcDeps[wbKey] = [s1bKey, s2bKey];
+        calcSet(wbKey, rd(s1b + s2b), [s1bKey, s2bKey]);
       }
 
       /* Re-read after possible sum calc */
       wa = ev(waKey); wb = ev(wbKey);
 
       /* Diff: s2 = wide - s1 (crossed) */
-      if (wa !== undefined && s1b !== undefined && ev(s2aKey) === undefined) {
-        calc[s2aKey] = rd(wa - s1b);
-        calcDeps[s2aKey] = [waKey, s1bKey];
+      if (wa !== undefined && s1b !== undefined) {
+        calcSet(s2aKey, rd(wa - s1b), [waKey, s1bKey]);
       }
-      if (wb !== undefined && s1a !== undefined && ev(s2bKey) === undefined) {
-        calc[s2bKey] = rd(wb - s1a);
-        calcDeps[s2bKey] = [wbKey, s1aKey];
+      if (wb !== undefined && s1a !== undefined) {
+        calcSet(s2bKey, rd(wb - s1a), [wbKey, s1aKey]);
       }
 
       /* Diff: s1 = wide - s2 (crossed) */
-      if (wa !== undefined && s2b !== undefined && ev(s1aKey) === undefined) {
-        calc[s1aKey] = rd(wa - s2b);
-        calcDeps[s1aKey] = [waKey, s2bKey];
+      if (wa !== undefined && s2b !== undefined) {
+        calcSet(s1aKey, rd(wa - s2b), [waKey, s2bKey]);
       }
-      if (wb !== undefined && s2a !== undefined && ev(s1bKey) === undefined) {
-        calc[s1bKey] = rd(wb - s2a);
-        calcDeps[s1bKey] = [wbKey, s2aKey];
+      if (wb !== undefined && s2a !== undefined) {
+        calcSet(s1bKey, rd(wb - s2a), [wbKey, s2aKey]);
       }
     });
 
@@ -326,13 +334,11 @@ function recalculate() {
         var l2a = ev('spread_' + leg2Label + '_ask'), l2b = ev('spread_' + leg2Label + '_bid');
 
         if (taEmpty && l1a !== undefined && l2a !== undefined) {
-          calc[taKey] = rd(l1a + l2a);
-          calcDeps[taKey] = ['spread_' + leg1Label + '_ask', 'spread_' + leg2Label + '_ask'];
+          calcSet(taKey, rd(l1a + l2a), ['spread_' + leg1Label + '_ask', 'spread_' + leg2Label + '_ask']);
           taEmpty = false;
         }
         if (tbEmpty && l1b !== undefined && l2b !== undefined) {
-          calc[tbKey] = rd(l1b + l2b);
-          calcDeps[tbKey] = ['spread_' + leg1Label + '_bid', 'spread_' + leg2Label + '_bid'];
+          calcSet(tbKey, rd(l1b + l2b), ['spread_' + leg1Label + '_bid', 'spread_' + leg2Label + '_bid']);
           tbEmpty = false;
         }
       }
@@ -349,26 +355,22 @@ function recalculate() {
 
       /* Far Ask = Near Ask + Spread Ask (same-side) */
       if (sa !== undefined && ev(faKey) === undefined && ev(naKey) !== undefined) {
-        calc[faKey] = rd(ev(naKey) + sa * BP);
-        calcDeps[faKey] = [naKey, saKey];
+        calcSet(faKey, rd(ev(naKey) + sa * BP), [naKey, saKey]);
         backCalcFrom[faKey] = s.label;
       }
       /* Far Bid = Near Bid + Spread Bid (same-side) */
       if (sb !== undefined && ev(fbKey) === undefined && ev(nbKey) !== undefined) {
-        calc[fbKey] = rd(ev(nbKey) + sb * BP);
-        calcDeps[fbKey] = [nbKey, sbKey];
+        calcSet(fbKey, rd(ev(nbKey) + sb * BP), [nbKey, sbKey]);
         backCalcFrom[fbKey] = s.label;
       }
       /* Near Ask = Far Ask - Spread Bid (cross-side) */
       if (sb !== undefined && ev(naKey) === undefined && ev(faKey) !== undefined) {
-        calc[naKey] = rd(ev(faKey) - sb * BP);
-        calcDeps[naKey] = [faKey, sbKey];
+        calcSet(naKey, rd(ev(faKey) - sb * BP), [faKey, sbKey]);
         backCalcFrom[naKey] = s.label;
       }
       /* Near Bid = Far Bid - Spread Ask (cross-side) */
       if (sa !== undefined && ev(nbKey) === undefined && ev(fbKey) !== undefined) {
-        calc[nbKey] = rd(ev(fbKey) - sa * BP);
-        calcDeps[nbKey] = [fbKey, saKey];
+        calcSet(nbKey, rd(ev(fbKey) - sa * BP), [fbKey, saKey]);
         backCalcFrom[nbKey] = s.label;
       }
     });
@@ -380,47 +382,44 @@ function recalculate() {
       var baKey = 'butterfly_' + b.label + '_ask', bbKey = 'butterfly_' + b.label + '_bid';
       var s1a = ev(s1aKey), s1b = ev(s1bKey), s2a = ev(s2aKey), s2b = ev(s2bKey);
       if (s1a !== undefined && s2b !== undefined) {
-        calc[baKey] = rd(s1a - s2b);
-        calcDeps[baKey] = [s1aKey, s2bKey];
+        calcSet(baKey, rd(s1a - s2b), [s1aKey, s2bKey]);
       }
       if (s1b !== undefined && s2a !== undefined) {
-        calc[bbKey] = rd(s1b - s2a);
-        calcDeps[bbKey] = [s1bKey, s2aKey];
+        calcSet(bbKey, rd(s1b - s2a), [s1bKey, s2aKey]);
       }
     });
 
-    /* --- Back-calc spreads from MANUAL butterflies, EMPTY cells only --- */
+    /* --- Back-calc spreads from butterflies (Rule 6) ---
+       B = S1 - S2
+       S2 = S1 - B  → minus rule: S2_ask = S1_ask - B_bid,  S2_bid = S1_bid - B_ask
+       S1 = B + S2   → plus rule:  S1_ask = B_ask + S2_ask,  S1_bid = B_bid + S2_bid */
     ALL_BUTTERFLIES.forEach(function(b) {
-      ['ask', 'bid'].forEach(function(side) {
-        var bk = 'butterfly_' + b.label + '_' + side;
-        var bv = manual[bk];
-        if (bv === undefined) return;
-        if (side === 'ask') {
-          var s1v = ev('spread_' + b.s1 + '_ask');
-          var s2bk = 'spread_' + b.s2 + '_bid';
-          if (ev(s2bk) === undefined && s1v !== undefined) {
-            calc[s2bk] = rd(s1v - bv);
-            calcDeps[s2bk] = ['spread_' + b.s1 + '_ask', bk];
-          }
-          var s1ak = 'spread_' + b.s1 + '_ask';
-          if (ev(s1ak) === undefined && ev(s2bk) !== undefined) {
-            calc[s1ak] = rd(bv + ev(s2bk));
-            calcDeps[s1ak] = [bk, s2bk];
-          }
-        } else {
-          var s1v2 = ev('spread_' + b.s1 + '_bid');
-          var s2ak = 'spread_' + b.s2 + '_ask';
-          if (ev(s2ak) === undefined && s1v2 !== undefined) {
-            calc[s2ak] = rd(s1v2 - bv);
-            calcDeps[s2ak] = ['spread_' + b.s1 + '_bid', bk];
-          }
-          var s1bk = 'spread_' + b.s1 + '_bid';
-          if (ev(s1bk) === undefined && ev(s2ak) !== undefined) {
-            calc[s1bk] = rd(bv + ev(s2ak));
-            calcDeps[s1bk] = [bk, s2ak];
-          }
-        }
-      });
+      var baKey = 'butterfly_' + b.label + '_ask', bbKey = 'butterfly_' + b.label + '_bid';
+      var ba = ev(baKey), bb = ev(bbKey);
+      if (ba === undefined && bb === undefined) return;
+
+      var s1aKey = 'spread_' + b.s1 + '_ask', s1bKey = 'spread_' + b.s1 + '_bid';
+      var s2aKey = 'spread_' + b.s2 + '_ask', s2bKey = 'spread_' + b.s2 + '_bid';
+      var s1a = ev(s1aKey), s1b = ev(s1bKey), s2a = ev(s2aKey), s2b = ev(s2bKey);
+
+      /* S2 = S1 - B (minus rule) */
+      if (s1a !== undefined && bb !== undefined) {
+        calcSet(s2aKey, rd(s1a - bb), [s1aKey, bbKey]);
+      }
+      if (s1b !== undefined && ba !== undefined) {
+        calcSet(s2bKey, rd(s1b - ba), [s1bKey, baKey]);
+      }
+
+      /* Re-read s2 after possible calc */
+      s2a = ev(s2aKey); s2b = ev(s2bKey);
+
+      /* S1 = B + S2 (plus rule) */
+      if (ba !== undefined && s2a !== undefined) {
+        calcSet(s1aKey, rd(ba + s2a), [baKey, s2aKey]);
+      }
+      if (bb !== undefined && s2b !== undefined) {
+        calcSet(s1bKey, rd(bb + s2b), [bbKey, s2bKey]);
+      }
     });
 
     /* --- Derive outrights from ANY available spread (manual or calc) ---
@@ -438,32 +437,28 @@ function recalculate() {
       /* Far Ask = Near Ask + Spread Ask (same-side) */
       if (sa !== undefined && ev(faKey) === undefined && ev(naKey) !== undefined) {
         if (backCalcFrom[naKey] !== s.label) {
-          calc[faKey] = rd(ev(naKey) + sa * BP);
-          calcDeps[faKey] = [naKey, saKey];
+          calcSet(faKey, rd(ev(naKey) + sa * BP), [naKey, saKey]);
           backCalcFrom[faKey] = s.label;
         }
       }
       /* Far Bid = Near Bid + Spread Bid (same-side) */
       if (sb !== undefined && ev(fbKey) === undefined && ev(nbKey) !== undefined) {
         if (backCalcFrom[nbKey] !== s.label) {
-          calc[fbKey] = rd(ev(nbKey) + sb * BP);
-          calcDeps[fbKey] = [nbKey, sbKey];
+          calcSet(fbKey, rd(ev(nbKey) + sb * BP), [nbKey, sbKey]);
           backCalcFrom[fbKey] = s.label;
         }
       }
       /* Near Ask = Far Ask - Spread Bid (cross-side) */
       if (sb !== undefined && ev(naKey) === undefined && ev(faKey) !== undefined) {
         if (backCalcFrom[faKey] !== s.label) {
-          calc[naKey] = rd(ev(faKey) - sb * BP);
-          calcDeps[naKey] = [faKey, sbKey];
+          calcSet(naKey, rd(ev(faKey) - sb * BP), [faKey, sbKey]);
           backCalcFrom[naKey] = s.label;
         }
       }
       /* Near Bid = Far Bid - Spread Ask (cross-side) */
       if (sa !== undefined && ev(nbKey) === undefined && ev(fbKey) !== undefined) {
         if (backCalcFrom[fbKey] !== s.label) {
-          calc[nbKey] = rd(ev(fbKey) - sa * BP);
-          calcDeps[nbKey] = [fbKey, saKey];
+          calcSet(nbKey, rd(ev(fbKey) - sa * BP), [fbKey, saKey]);
           backCalcFrom[nbKey] = s.label;
         }
       }
@@ -498,12 +493,10 @@ function recalculate() {
 
         /* Long fly = Short fly - Mid spread (crossed) */
         if (sfa !== undefined && msb !== undefined && lfa === undefined) {
-          calc[lfaKey] = rd(sfa - msb);
-          calcDeps[lfaKey] = [sfaKey, msbKey];
+          calcSet(lfaKey, rd(sfa - msb), [sfaKey, msbKey]);
         }
         if (sfb !== undefined && msa !== undefined && lfb === undefined) {
-          calc[lfbKey] = rd(sfb - msa);
-          calcDeps[lfbKey] = [sfbKey, msaKey];
+          calcSet(lfbKey, rd(sfb - msa), [sfbKey, msaKey]);
         }
 
         /* Re-read */
@@ -511,25 +504,21 @@ function recalculate() {
 
         /* Mid spread = Short fly - Long fly (crossed) */
         if (sfa !== undefined && lfb !== undefined && msa === undefined) {
-          calc[msaKey] = rd(sfa - lfb);
-          calcDeps[msaKey] = [sfaKey, lfbKey];
+          calcSet(msaKey, rd(sfa - lfb), [sfaKey, lfbKey]);
         }
         if (sfb !== undefined && lfa !== undefined && msb === undefined) {
-          calc[msbKey] = rd(sfb - lfa);
-          calcDeps[msbKey] = [sfbKey, lfaKey];
+          calcSet(msbKey, rd(sfb - lfa), [sfbKey, lfaKey]);
         }
 
         /* Re-read */
         msa = ev(msaKey); msb = ev(msbKey);
 
         /* Short fly = Long fly + Mid spread (same-side addition) */
-        if (lfa !== undefined && msa !== undefined && ev(sfaKey) === undefined) {
-          calc[sfaKey] = rd(lfa + msa);
-          calcDeps[sfaKey] = [lfaKey, msaKey];
+        if (lfa !== undefined && msa !== undefined) {
+          calcSet(sfaKey, rd(lfa + msa), [lfaKey, msaKey]);
         }
-        if (lfb !== undefined && msb !== undefined && ev(sfbKey) === undefined) {
-          calc[sfbKey] = rd(lfb + msb);
-          calcDeps[sfbKey] = [lfbKey, msbKey];
+        if (lfb !== undefined && msb !== undefined) {
+          calcSet(sfbKey, rd(lfb + msb), [lfbKey, msbKey]);
         }
       }
     }
@@ -592,14 +581,12 @@ function recalculate() {
           if (!BF[newLabel]) return; /* must be a valid tenor combination */
           var nfaKey = 'butterfly_' + newLabel + '_ask', nfbKey = 'butterfly_' + newLabel + '_bid';
           /* new_fly_ask = spread_ask + old_fly_ask (same-side) */
-          if (spa !== undefined && bfa !== undefined && ev(nfaKey) === undefined) {
-            calc[nfaKey] = rd(spa + bfa);
-            calcDeps[nfaKey] = [spaKey, bfaKey];
+          if (spa !== undefined && bfa !== undefined) {
+            calcSet(nfaKey, rd(spa + bfa), [spaKey, bfaKey]);
           }
           /* new_fly_bid = spread_bid + old_fly_bid (same-side) */
-          if (spb !== undefined && bfb !== undefined && ev(nfbKey) === undefined) {
-            calc[nfbKey] = rd(spb + bfb);
-            calcDeps[nfbKey] = [spbKey, bfbKey];
+          if (spb !== undefined && bfb !== undefined) {
+            calcSet(nfbKey, rd(spb + bfb), [spbKey, bfbKey]);
           }
         }
 
@@ -609,14 +596,12 @@ function recalculate() {
           if (!BF[newLabel2]) return;
           var nfaKey2 = 'butterfly_' + newLabel2 + '_ask', nfbKey2 = 'butterfly_' + newLabel2 + '_bid';
           /* new_fly_ask = old_fly_ask - spread_bid (crossed) */
-          if (bfa !== undefined && spb !== undefined && ev(nfaKey2) === undefined) {
-            calc[nfaKey2] = rd(bfa - spb);
-            calcDeps[nfaKey2] = [bfaKey, spbKey];
+          if (bfa !== undefined && spb !== undefined) {
+            calcSet(nfaKey2, rd(bfa - spb), [bfaKey, spbKey]);
           }
           /* new_fly_bid = old_fly_bid - spread_ask (crossed) */
-          if (bfb !== undefined && spa !== undefined && ev(nfbKey2) === undefined) {
-            calc[nfbKey2] = rd(bfb - spa);
-            calcDeps[nfbKey2] = [bfbKey, spaKey];
+          if (bfb !== undefined && spa !== undefined) {
+            calcSet(nfbKey2, rd(bfb - spa), [bfbKey, spaKey]);
           }
         }
 
@@ -627,13 +612,11 @@ function recalculate() {
           var newLabel3 = bLabel(sp.far, bf.t2, bf.t3);
           if (!BF[newLabel3]) return;
           var nfaKey3 = 'butterfly_' + newLabel3 + '_ask', nfbKey3 = 'butterfly_' + newLabel3 + '_bid';
-          if (bfa !== undefined && spb !== undefined && ev(nfaKey3) === undefined) {
-            calc[nfaKey3] = rd(bfa - spb);
-            calcDeps[nfaKey3] = [bfaKey, spbKey];
+          if (bfa !== undefined && spb !== undefined) {
+            calcSet(nfaKey3, rd(bfa - spb), [bfaKey, spbKey]);
           }
-          if (bfb !== undefined && spa !== undefined && ev(nfbKey3) === undefined) {
-            calc[nfbKey3] = rd(bfb - spa);
-            calcDeps[nfbKey3] = [bfbKey, spaKey];
+          if (bfb !== undefined && spa !== undefined) {
+            calcSet(nfbKey3, rd(bfb - spa), [bfbKey, spaKey]);
           }
         }
 
@@ -643,13 +626,11 @@ function recalculate() {
           var newLabel4 = bLabel(bf.t1, bf.t2, sp.near);
           if (!BF[newLabel4]) return;
           var nfaKey4 = 'butterfly_' + newLabel4 + '_ask', nfbKey4 = 'butterfly_' + newLabel4 + '_bid';
-          if (spa !== undefined && bfa !== undefined && ev(nfaKey4) === undefined) {
-            calc[nfaKey4] = rd(bfa + spa);
-            calcDeps[nfaKey4] = [bfaKey, spaKey];
+          if (spa !== undefined && bfa !== undefined) {
+            calcSet(nfaKey4, rd(bfa + spa), [bfaKey, spaKey]);
           }
-          if (spb !== undefined && bfb !== undefined && ev(nfbKey4) === undefined) {
-            calc[nfbKey4] = rd(bfb + spb);
-            calcDeps[nfbKey4] = [bfbKey, spbKey];
+          if (spb !== undefined && bfb !== undefined) {
+            calcSet(nfbKey4, rd(bfb + spb), [bfbKey, spbKey]);
           }
         }
       });
@@ -671,14 +652,12 @@ function recalculate() {
         var df1a = ev('butterfly_' + d1.label + '_ask'), df1b = ev('butterfly_' + d1.label + '_bid');
         var df2a = ev('butterfly_' + d2.label + '_ask'), df2b = ev('butterfly_' + d2.label + '_bid');
         /* spread_ask = short_fly_ask - long_fly_bid (crossed) */
-        if (df1a !== undefined && df2b !== undefined && ev(dsaKey) === undefined) {
-          calc[dsaKey] = rd(df1a - df2b);
-          calcDeps[dsaKey] = ['butterfly_' + d1.label + '_ask', 'butterfly_' + d2.label + '_bid'];
+        if (df1a !== undefined && df2b !== undefined) {
+          calcSet(dsaKey, rd(df1a - df2b), ['butterfly_' + d1.label + '_ask', 'butterfly_' + d2.label + '_bid']);
         }
         /* spread_bid = short_fly_bid - long_fly_ask (crossed) */
-        if (df1b !== undefined && df2a !== undefined && ev(dsbKey) === undefined) {
-          calc[dsbKey] = rd(df1b - df2a);
-          calcDeps[dsbKey] = ['butterfly_' + d1.label + '_bid', 'butterfly_' + d2.label + '_ask'];
+        if (df1b !== undefined && df2a !== undefined) {
+          calcSet(dsbKey, rd(df1b - df2a), ['butterfly_' + d1.label + '_bid', 'butterfly_' + d2.label + '_ask']);
         }
       }
     }
@@ -697,13 +676,11 @@ function recalculate() {
           var dbaKey = 'butterfly_' + dbfLabel + '_ask', dbbKey = 'butterfly_' + dbfLabel + '_bid';
           var dsp1a = ev('spread_' + sp1.label + '_ask'), dsp1b = ev('spread_' + sp1.label + '_bid');
           var dsp2a = ev('spread_' + sp2.label + '_ask'), dsp2b = ev('spread_' + sp2.label + '_bid');
-          if (dsp1a !== undefined && dsp2b !== undefined && ev(dbaKey) === undefined) {
-            calc[dbaKey] = rd(dsp1a - dsp2b);
-            calcDeps[dbaKey] = ['spread_' + sp1.label + '_ask', 'spread_' + sp2.label + '_bid'];
+          if (dsp1a !== undefined && dsp2b !== undefined) {
+            calcSet(dbaKey, rd(dsp1a - dsp2b), ['spread_' + sp1.label + '_ask', 'spread_' + sp2.label + '_bid']);
           }
-          if (dsp1b !== undefined && dsp2a !== undefined && ev(dbbKey) === undefined) {
-            calc[dbbKey] = rd(dsp1b - dsp2a);
-            calcDeps[dbbKey] = ['spread_' + sp1.label + '_bid', 'spread_' + sp2.label + '_ask'];
+          if (dsp1b !== undefined && dsp2a !== undefined) {
+            calcSet(dbbKey, rd(dsp1b - dsp2a), ['spread_' + sp1.label + '_bid', 'spread_' + sp2.label + '_ask']);
           }
         }
         /* Also check sp2.far == sp1.near (reverse touch) */
@@ -713,13 +690,11 @@ function recalculate() {
           var dbaKey2 = 'butterfly_' + dbfLabel2 + '_ask', dbbKey2 = 'butterfly_' + dbfLabel2 + '_bid';
           var dsp2a2 = ev('spread_' + sp2.label + '_ask'), dsp2b2 = ev('spread_' + sp2.label + '_bid');
           var dsp1a2 = ev('spread_' + sp1.label + '_ask'), dsp1b2 = ev('spread_' + sp1.label + '_bid');
-          if (dsp2a2 !== undefined && dsp1b2 !== undefined && ev(dbaKey2) === undefined) {
-            calc[dbaKey2] = rd(dsp2a2 - dsp1b2);
-            calcDeps[dbaKey2] = ['spread_' + sp2.label + '_ask', 'spread_' + sp1.label + '_bid'];
+          if (dsp2a2 !== undefined && dsp1b2 !== undefined) {
+            calcSet(dbaKey2, rd(dsp2a2 - dsp1b2), ['spread_' + sp2.label + '_ask', 'spread_' + sp1.label + '_bid']);
           }
-          if (dsp2b2 !== undefined && dsp1a2 !== undefined && ev(dbbKey2) === undefined) {
-            calc[dbbKey2] = rd(dsp2b2 - dsp1a2);
-            calcDeps[dbbKey2] = ['spread_' + sp2.label + '_bid', 'spread_' + sp1.label + '_ask'];
+          if (dsp2b2 !== undefined && dsp1a2 !== undefined) {
+            calcSet(dbbKey2, rd(dsp2b2 - dsp1a2), ['spread_' + sp2.label + '_bid', 'spread_' + sp1.label + '_ask']);
           }
         }
       }
@@ -795,15 +770,13 @@ function recalculate() {
     if (calc[ak] !== undefined) {
       var fa2 = gv('outright_' + s.far + '_ask'), nb2 = gv('outright_' + s.near + '_bid');
       if (fa2 !== undefined && nb2 !== undefined) {
-        calc[ak] = rd((fa2 - nb2) / BP);
-        calcDeps[ak] = ['outright_' + s.far + '_ask', 'outright_' + s.near + '_bid'];
+        calcSet(ak, rd((fa2 - nb2) / BP), ['outright_' + s.far + '_ask', 'outright_' + s.near + '_bid']);
       }
     }
     if (calc[bk] !== undefined) {
       var fb2 = gv('outright_' + s.far + '_bid'), na2 = gv('outright_' + s.near + '_ask');
       if (fb2 !== undefined && na2 !== undefined) {
-        calc[bk] = rd((fb2 - na2) / BP);
-        calcDeps[bk] = ['outright_' + s.far + '_bid', 'outright_' + s.near + '_ask'];
+        calcSet(bk, rd((fb2 - na2) / BP), ['outright_' + s.far + '_bid', 'outright_' + s.near + '_ask']);
       }
     }
   });
@@ -814,15 +787,13 @@ function recalculate() {
     if (calc[ak] !== undefined) {
       var s1a2 = gv('spread_' + b.s1 + '_ask'), s2b2 = gv('spread_' + b.s2 + '_bid');
       if (s1a2 !== undefined && s2b2 !== undefined) {
-        calc[ak] = rd(s1a2 - s2b2);
-        calcDeps[ak] = ['spread_' + b.s1 + '_ask', 'spread_' + b.s2 + '_bid'];
+        calcSet(ak, rd(s1a2 - s2b2), ['spread_' + b.s1 + '_ask', 'spread_' + b.s2 + '_bid']);
       }
     }
     if (calc[bk] !== undefined) {
       var s1b2 = gv('spread_' + b.s1 + '_bid'), s2a2 = gv('spread_' + b.s2 + '_ask');
       if (s1b2 !== undefined && s2a2 !== undefined) {
-        calc[bk] = rd(s1b2 - s2a2);
-        calcDeps[bk] = ['spread_' + b.s1 + '_bid', 'spread_' + b.s2 + '_ask'];
+        calcSet(bk, rd(s1b2 - s2a2), ['spread_' + b.s1 + '_bid', 'spread_' + b.s2 + '_ask']);
       }
     }
   });
