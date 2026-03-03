@@ -94,7 +94,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v1.9</span>
+  <span class="version">v2.0</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -309,41 +309,6 @@ function recalculate() {
       }
     });
 
-    /* --- General spread chaining (same-side sum) ---
-       For any spread(A,C), if spread(A,B) and spread(B,C) both have values
-       for some intermediate tenor B, then:
-         spread(A,C)_ask = spread(A,B)_ask + spread(B,C)_ask  (same-side)
-         spread(A,C)_bid = spread(A,B)_bid + spread(B,C)_bid  (same-side)
-       Only fills EMPTY cells. Multi-leg chains (e.g. 2x5 = 2x3+3x4+4x5)
-       are handled iteratively across passes. */
-    ALL_SPREADS.forEach(function(target) {
-      var taKey = 'spread_' + target.label + '_ask', tbKey = 'spread_' + target.label + '_bid';
-      var taEmpty = (ev(taKey) === undefined), tbEmpty = (ev(tbKey) === undefined);
-      if (!taEmpty && !tbEmpty) return;
-
-      for (var ti = 0; ti < TENORS.length; ti++) {
-        var mid = TENORS[ti];
-        if (TENORS.indexOf(mid) <= TENORS.indexOf(target.near)) continue;
-        if (TENORS.indexOf(mid) >= TENORS.indexOf(target.far)) continue;
-
-        var leg1Label = sLabel(target.near, mid);
-        var leg2Label = sLabel(mid, target.far);
-        if (!SP[leg1Label] || !SP[leg2Label]) continue;
-
-        var l1a = ev('spread_' + leg1Label + '_ask'), l1b = ev('spread_' + leg1Label + '_bid');
-        var l2a = ev('spread_' + leg2Label + '_ask'), l2b = ev('spread_' + leg2Label + '_bid');
-
-        if (taEmpty && l1a !== undefined && l2a !== undefined) {
-          calcSet(taKey, rd(l1a + l2a), ['spread_' + leg1Label + '_ask', 'spread_' + leg2Label + '_ask']);
-          taEmpty = false;
-        }
-        if (tbEmpty && l1b !== undefined && l2b !== undefined) {
-          calcSet(tbKey, rd(l1b + l2b), ['spread_' + leg1Label + '_bid', 'spread_' + leg2Label + '_bid']);
-          tbEmpty = false;
-        }
-      }
-    });
-
     /* --- Back-calc outrights from MANUAL spreads, EMPTY cells only ---
        Far from Near (same-side):  far_ask = near_ask + spread_ask,  far_bid = near_bid + spread_bid
        Near from Far (cross-side): near_ask = far_ask - spread_bid,  near_bid = far_bid - spread_ask */
@@ -522,6 +487,36 @@ function recalculate() {
         }
       }
     }
+
+    /* --- General spread chaining (same-side sum) ---
+       For any spread(A,C), if spread(A,B) and spread(B,C) both have values
+       for some intermediate tenor B, then:
+         spread(A,C)_ask = spread(A,B)_ask + spread(B,C)_ask  (same-side)
+         spread(A,C)_bid = spread(A,B)_bid + spread(B,C)_bid  (same-side)
+       calcSet picks tightest price if multiple paths exist. */
+    ALL_SPREADS.forEach(function(target) {
+      var taKey = 'spread_' + target.label + '_ask', tbKey = 'spread_' + target.label + '_bid';
+
+      for (var ti = 0; ti < TENORS.length; ti++) {
+        var mid = TENORS[ti];
+        if (TENORS.indexOf(mid) <= TENORS.indexOf(target.near)) continue;
+        if (TENORS.indexOf(mid) >= TENORS.indexOf(target.far)) continue;
+
+        var leg1Label = sLabel(target.near, mid);
+        var leg2Label = sLabel(mid, target.far);
+        if (!SP[leg1Label] || !SP[leg2Label]) continue;
+
+        var l1a = ev('spread_' + leg1Label + '_ask'), l1b = ev('spread_' + leg1Label + '_bid');
+        var l2a = ev('spread_' + leg2Label + '_ask'), l2b = ev('spread_' + leg2Label + '_bid');
+
+        if (l1a !== undefined && l2a !== undefined) {
+          calcSet(taKey, rd(l1a + l2a), ['spread_' + leg1Label + '_ask', 'spread_' + leg2Label + '_ask']);
+        }
+        if (l1b !== undefined && l2b !== undefined) {
+          calcSet(tbKey, rd(l1b + l2b), ['spread_' + leg1Label + '_bid', 'spread_' + leg2Label + '_bid']);
+        }
+      }
+    });
 
     /* --- Reverse chaining: spread + butterfly → new butterfly ---
        If spread(A,B) and fly(B,C,D) exist → create fly(A,C,D)  [near tenor match with t1]
