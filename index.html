@@ -91,19 +91,19 @@
 
   /* DV01 Tools */
   .dv01-container { display: flex; gap: 16px; margin-top: 12px; margin-bottom: 12px; }
-  .dv01-section { background: var(--card-bg); border-radius: var(--radius); border: 1px solid var(--cell-border); box-shadow: var(--shadow-md); overflow: hidden; flex: 1; }
-  .dv01-header { background: var(--accent); color: #fff; padding: 8px 14px; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.3px; }
-  .dv01-body { padding: 12px 14px; }
-  .dv01-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .dv01-section { background: var(--card-bg); border-radius: var(--radius); border: 1px solid var(--cell-border); box-shadow: var(--shadow-sm); overflow: hidden; }
+  .dv01-header { background: var(--accent); color: #fff; padding: 5px 10px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; }
+  .dv01-body { padding: 6px 8px; }
+  .dv01-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
   .dv01-row:last-child { margin-bottom: 0; }
-  .dv01-label { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; color: var(--text-muted); width: 56px; text-align: right; flex-shrink: 0; }
-  .dv01-select { font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 6px 8px; border: 1px solid var(--cell-border); border-radius: 5px; background: #fff; outline: none; cursor: pointer; min-width: 70px; }
+  .dv01-label { font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600; color: var(--text-muted); width: 42px; text-align: right; flex-shrink: 0; }
+  .dv01-select { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 4px; border: 1px solid var(--cell-border); border-radius: 4px; background: #fff; outline: none; cursor: pointer; min-width: 52px; }
   .dv01-select:focus { border-color: var(--accent); }
-  .dv01-input { font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 6px 10px; border: 1px solid var(--cell-border); border-radius: 5px; text-align: right; outline: none; width: 100px; }
+  .dv01-input { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 6px; border: 1px solid var(--cell-border); border-radius: 4px; text-align: right; outline: none; width: 70px; }
   .dv01-input:focus { border-color: var(--accent); }
   .dv01-input.editable { background: #fffde7; border-color: #e2d9b8; font-weight: 600; }
   .dv01-input.readonly { background: var(--calc-bg); color: var(--text); font-weight: 500; }
-  .dv01-unit { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--text-muted); }
+  .dv01-unit { font-family: 'Inter', sans-serif; font-size: 9px; color: var(--text-muted); }
   .dv01-select.editable { background: #fffde7; border-color: #e2d9b8; }
   /* Password gate */
   .password-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 60%, #1a365d 100%); z-index: 9999; display: flex; align-items: center; justify-content: center; }
@@ -131,7 +131,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v2.6</span>
+  <span class="version">v2.7</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -151,51 +151,51 @@
 <div class="matrix-container">
   <div class="section"><table><thead><tr><th>Outright</th><th>Ask</th><th>Bid</th></tr></thead><tbody id="outrightBody"></tbody></table></div>
   <div class="section"><div class="scroll-wrapper"><table><thead><tr><th>Spread</th><th>Ask</th><th>Bid</th></tr></thead><tbody id="spreadBody"></tbody></table></div></div>
-  <div class="section"><div class="scroll-wrapper"><table><thead><tr><th>Butterfly</th><th>Ask</th><th>Bid</th></tr></thead><tbody id="butterflyBody"></tbody></table></div></div>
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div class="section"><div class="scroll-wrapper"><table><thead><tr><th>Butterfly</th><th>Ask</th><th>Bid</th></tr></thead><tbody id="butterflyBody"></tbody></table></div></div>
+    <div class="dv01-section">
+      <div class="dv01-header">DV01 Converter</div>
+      <div class="dv01-body">
+        <div class="dv01-row">
+          <span class="dv01-label">Target</span>
+          <select class="dv01-select" id="dv01TargetTenor"></select>
+          <input class="dv01-input readonly" id="dv01TargetAmt" type="text" readonly value="">
+          <span class="dv01-unit">m</span>
+        </div>
+        <div class="dv01-row">
+          <span class="dv01-label">Base</span>
+          <select class="dv01-select editable" id="dv01BaseTenor"></select>
+          <input class="dv01-input editable" id="dv01BaseAmt" type="text" placeholder="0" value="">
+          <span class="dv01-unit">m</span>
+        </div>
+      </div>
+    </div>
+    <div class="dv01-section">
+      <div class="dv01-header">Fly DV01 Helper</div>
+      <div class="dv01-body">
+        <div class="dv01-row">
+          <span class="dv01-label">Wing 1</span>
+          <select class="dv01-select" id="flyW1Tenor"></select>
+          <input class="dv01-input readonly" id="flyW1Amt" type="text" readonly value="">
+          <span class="dv01-unit">m</span>
+        </div>
+        <div class="dv01-row">
+          <span class="dv01-label">Belly</span>
+          <select class="dv01-select editable" id="flyBellyTenor"></select>
+          <input class="dv01-input editable" id="flyBellyAmt" type="text" placeholder="0" value="">
+          <span class="dv01-unit">m</span>
+        </div>
+        <div class="dv01-row">
+          <span class="dv01-label">Wing 2</span>
+          <select class="dv01-select" id="flyW2Tenor"></select>
+          <input class="dv01-input readonly" id="flyW2Amt" type="text" readonly value="">
+          <span class="dv01-unit">m</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="dv01-container">
-  <div class="dv01-section">
-    <div class="dv01-header">DV01 Converter</div>
-    <div class="dv01-body">
-      <div class="dv01-row">
-        <span class="dv01-label">Base</span>
-        <select class="dv01-select editable" id="dv01BaseTenor"></select>
-        <input class="dv01-input editable" id="dv01BaseAmt" type="text" placeholder="0" value="">
-        <span class="dv01-unit">m</span>
-      </div>
-      <div class="dv01-row">
-        <span class="dv01-label">Target</span>
-        <select class="dv01-select" id="dv01TargetTenor"></select>
-        <input class="dv01-input readonly" id="dv01TargetAmt" type="text" readonly value="">
-        <span class="dv01-unit">m</span>
-      </div>
-    </div>
-  </div>
-  <div class="dv01-section">
-    <div class="dv01-header">Fly DV01 Helper</div>
-    <div class="dv01-body">
-      <div class="dv01-row">
-        <span class="dv01-label">Wing 1</span>
-        <select class="dv01-select" id="flyW1Tenor"></select>
-        <input class="dv01-input readonly" id="flyW1Amt" type="text" readonly value="">
-        <span class="dv01-unit">m</span>
-      </div>
-      <div class="dv01-row">
-        <span class="dv01-label">Belly</span>
-        <select class="dv01-select editable" id="flyBellyTenor"></select>
-        <input class="dv01-input editable" id="flyBellyAmt" type="text" placeholder="0" value="">
-        <span class="dv01-unit">m</span>
-      </div>
-      <div class="dv01-row">
-        <span class="dv01-label">Wing 2</span>
-        <select class="dv01-select" id="flyW2Tenor"></select>
-        <input class="dv01-input readonly" id="flyW2Amt" type="text" readonly value="">
-        <span class="dv01-unit">m</span>
-      </div>
-    </div>
-  </div>
-</div>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch sw-input"></span><span><b>Bold</b> = User input</span></div>
   <div class="legend-item"><span class="legend-swatch sw-calc"></span><span>Normal = Calculated</span></div>
