@@ -94,7 +94,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v2.3</span>
+  <span class="version">v2.4</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -324,23 +324,27 @@ function recalculate() {
 
       /* Far Ask = Near Ask + Spread Ask (same-side) */
       if (sa !== undefined && ev(naKey) !== undefined) {
-        calcSet(faKey, rd(ev(naKey) + sa * BP), [naKey, saKey]);
-        backCalcFrom[faKey] = s.label;
+        if (calcSet(faKey, rd(ev(naKey) + sa * BP), [naKey, saKey])) {
+          backCalcFrom[faKey] = s.label;
+        }
       }
       /* Far Bid = Near Bid + Spread Bid (same-side) */
       if (sb !== undefined && ev(nbKey) !== undefined) {
-        calcSet(fbKey, rd(ev(nbKey) + sb * BP), [nbKey, sbKey]);
-        backCalcFrom[fbKey] = s.label;
+        if (calcSet(fbKey, rd(ev(nbKey) + sb * BP), [nbKey, sbKey])) {
+          backCalcFrom[fbKey] = s.label;
+        }
       }
       /* Near Ask = Far Ask - Spread Bid (cross-side) */
       if (sb !== undefined && ev(faKey) !== undefined) {
-        calcSet(naKey, rd(ev(faKey) - sb * BP), [faKey, sbKey]);
-        backCalcFrom[naKey] = s.label;
+        if (calcSet(naKey, rd(ev(faKey) - sb * BP), [faKey, sbKey])) {
+          backCalcFrom[naKey] = s.label;
+        }
       }
       /* Near Bid = Far Bid - Spread Ask (cross-side) */
       if (sa !== undefined && ev(fbKey) !== undefined) {
-        calcSet(nbKey, rd(ev(fbKey) - sa * BP), [fbKey, saKey]);
-        backCalcFrom[nbKey] = s.label;
+        if (calcSet(nbKey, rd(ev(fbKey) - sa * BP), [fbKey, saKey])) {
+          backCalcFrom[nbKey] = s.label;
+        }
       }
     });
 
@@ -406,29 +410,33 @@ function recalculate() {
       /* Far Ask = Near Ask + Spread Ask (same-side) */
       if (sa !== undefined && ev(naKey) !== undefined) {
         if (backCalcFrom[naKey] !== s.label) {
-          calcSet(faKey, rd(ev(naKey) + sa * BP), [naKey, saKey]);
-          backCalcFrom[faKey] = s.label;
+          if (calcSet(faKey, rd(ev(naKey) + sa * BP), [naKey, saKey])) {
+            backCalcFrom[faKey] = s.label;
+          }
         }
       }
       /* Far Bid = Near Bid + Spread Bid (same-side) */
       if (sb !== undefined && ev(nbKey) !== undefined) {
         if (backCalcFrom[nbKey] !== s.label) {
-          calcSet(fbKey, rd(ev(nbKey) + sb * BP), [nbKey, sbKey]);
-          backCalcFrom[fbKey] = s.label;
+          if (calcSet(fbKey, rd(ev(nbKey) + sb * BP), [nbKey, sbKey])) {
+            backCalcFrom[fbKey] = s.label;
+          }
         }
       }
       /* Near Ask = Far Ask - Spread Bid (cross-side) */
       if (sb !== undefined && ev(faKey) !== undefined) {
         if (backCalcFrom[faKey] !== s.label) {
-          calcSet(naKey, rd(ev(faKey) - sb * BP), [faKey, sbKey]);
-          backCalcFrom[naKey] = s.label;
+          if (calcSet(naKey, rd(ev(faKey) - sb * BP), [faKey, sbKey])) {
+            backCalcFrom[naKey] = s.label;
+          }
         }
       }
       /* Near Bid = Far Bid - Spread Ask (cross-side) */
       if (sa !== undefined && ev(fbKey) !== undefined) {
         if (backCalcFrom[fbKey] !== s.label) {
-          calcSet(nbKey, rd(ev(fbKey) - sa * BP), [fbKey, saKey]);
-          backCalcFrom[nbKey] = s.label;
+          if (calcSet(nbKey, rd(ev(fbKey) - sa * BP), [fbKey, saKey])) {
+            backCalcFrom[nbKey] = s.label;
+          }
         }
       }
     });
