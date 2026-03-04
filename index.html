@@ -94,7 +94,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v2.4</span>
+  <span class="version">v2.5</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -465,8 +465,11 @@ function recalculate() {
         var lfaKey = 'butterfly_' + longFly.label + '_ask',  lfbKey = 'butterfly_' + longFly.label + '_bid';
         var msaKey = 'spread_' + midSpreadLabel + '_ask',    msbKey = 'spread_' + midSpreadLabel + '_bid';
 
+        /* Rule 9 outputs are atomic-only: skip this mid spread for chaining */
+        var msRule9 = rule9Protected[msaKey] || rule9Protected[msbKey];
+
         var sfa = ev(sfaKey), sfb = ev(sfbKey), lfa = ev(lfaKey), lfb = ev(lfbKey);
-        var msa = ev(msaKey), msb = ev(msbKey);
+        var msa = msRule9 ? undefined : ev(msaKey), msb = msRule9 ? undefined : ev(msbKey);
 
         /* Long fly = Short fly - Mid spread (crossed) */
         if (sfa !== undefined && msb !== undefined && lfa === undefined) {
@@ -488,7 +491,7 @@ function recalculate() {
         }
 
         /* Re-read */
-        msa = ev(msaKey); msb = ev(msbKey);
+        msa = msRule9 ? undefined : ev(msaKey); msb = msRule9 ? undefined : ev(msbKey);
 
         /* Short fly = Long fly + Mid spread (same-side addition) */
         if (lfa !== undefined && msa !== undefined) {
@@ -518,6 +521,9 @@ function recalculate() {
         var leg2Label = sLabel(mid, target.far);
         if (!SP[leg1Label] || !SP[leg2Label]) continue;
 
+        /* Rule 9 outputs are atomic-only: skip as chaining legs */
+        if (rule9Protected['spread_' + leg1Label + '_ask'] || rule9Protected['spread_' + leg1Label + '_bid']) continue;
+        if (rule9Protected['spread_' + leg2Label + '_ask'] || rule9Protected['spread_' + leg2Label + '_bid']) continue;
         var l1a = ev('spread_' + leg1Label + '_ask'), l1b = ev('spread_' + leg1Label + '_bid');
         var l2a = ev('spread_' + leg2Label + '_ask'), l2b = ev('spread_' + leg2Label + '_bid');
 
@@ -611,6 +617,8 @@ function recalculate() {
     */
     ALL_SPREADS.forEach(function(sp) {
       var spaKey = 'spread_' + sp.label + '_ask', spbKey = 'spread_' + sp.label + '_bid';
+      /* Rule 9 outputs are atomic-only: skip for chaining */
+      if (rule9Protected[spaKey] || rule9Protected[spbKey]) return;
       var spa = ev(spaKey), spb = ev(spbKey);
       if (spa === undefined && spb === undefined) return;
 
@@ -713,8 +721,12 @@ function recalculate() {
     for (var si = 0; si < ALL_SPREADS.length; si++) {
       for (var sj = si + 1; sj < ALL_SPREADS.length; sj++) {
         var sp1 = ALL_SPREADS[si], sp2 = ALL_SPREADS[sj];
+        /* Rule 9 outputs are atomic-only: skip for decomposition */
+        var sp1r9 = rule9Protected['spread_' + sp1.label + '_ask'] || rule9Protected['spread_' + sp1.label + '_bid'];
+        var sp2r9 = rule9Protected['spread_' + sp2.label + '_ask'] || rule9Protected['spread_' + sp2.label + '_bid'];
         /* Check if sp1.far == sp2.near (touching) */
         if (sp1.far === sp2.near) {
+          if (sp1r9 || sp2r9) continue;
           var dbfLabel = bLabel(sp1.near, sp1.far, sp2.far);
           if (!BF[dbfLabel]) continue;
           var dbaKey = 'butterfly_' + dbfLabel + '_ask', dbbKey = 'butterfly_' + dbfLabel + '_bid';
@@ -729,6 +741,7 @@ function recalculate() {
         }
         /* Also check sp2.far == sp1.near (reverse touch) */
         if (sp2.far === sp1.near) {
+          if (sp1r9 || sp2r9) continue;
           var dbfLabel2 = bLabel(sp2.near, sp2.far, sp1.far);
           if (!BF[dbfLabel2]) continue;
           var dbaKey2 = 'butterfly_' + dbfLabel2 + '_ask', dbbKey2 = 'butterfly_' + dbfLabel2 + '_bid';
