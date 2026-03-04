@@ -131,7 +131,7 @@
 <div class="top-bar">
   <span class="title">CNH CCS Spread Matrix</span>
   <span class="subtitle">Offline Calculator</span>
-  <span class="version">v2.7</span>
+  <span class="version">v2.8</span>
 </div>
 <div class="trade-bar">
   <span class="trade-bar-label">Trade</span>
@@ -1445,8 +1445,8 @@ renderAll();
   var targetTenor = document.getElementById('dv01TargetTenor');
   var targetAmt = document.getElementById('dv01TargetAmt');
 
-  populateSelect(baseTenor, 4);  /* default 2Y */
-  populateSelect(targetTenor, 5); /* default 3Y */
+  populateSelect(baseTenor, 5);  /* default 3Y */
+  populateSelect(targetTenor, 4); /* default 2Y */
 
   function calcDV01() {
     var amt = parseFloat(baseAmt.value);
